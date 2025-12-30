@@ -51,6 +51,8 @@ const StudentDashboard = () => {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [parentWhatsapp, setParentWhatsapp] = useState<string | null>(null);
   const [sendingReport, setSendingReport] = useState(false);
+  const [isApproved, setIsApproved] = useState<boolean | null>(null);
+  const [schoolName, setSchoolName] = useState<string>("");
   
   const [stats, setStats] = useState({
     todayStudied: false,
@@ -76,10 +78,10 @@ const StudentDashboard = () => {
     if (!user) return;
 
     try {
-      // Get student profile
+      // Get student profile with school info
       const { data: student } = await supabase
         .from("students")
-        .select("*")
+        .select("*, schools(name)")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -87,43 +89,46 @@ const StudentDashboard = () => {
         setUserName(student.full_name);
         setStudentId(student.id);
         setParentWhatsapp(student.parent_whatsapp);
-        // Get study sessions
-        const { data: sessions } = await supabase
-          .from("study_sessions")
-          .select("*")
-          .eq("student_id", student.id)
-          .order("created_at", { ascending: false });
+        setIsApproved(student.is_approved);
+        setSchoolName((student.schools as any)?.name || "Your School");
+        
+        // Only load sessions if approved
+        if (student.is_approved) {
+          const { data: sessions } = await supabase
+            .from("study_sessions")
+            .select("*")
+            .eq("student_id", student.id)
+            .order("created_at", { ascending: false });
 
-        if (sessions) {
-          const totalTime = sessions.reduce((acc, s) => acc + (s.time_spent || 0), 0);
-          const avgScore = sessions.length > 0 
-            ? Math.round(sessions.reduce((acc, s) => acc + (s.improvement_score || 50), 0) / sessions.length)
-            : 50;
+          if (sessions) {
+            const totalTime = sessions.reduce((acc, s) => acc + (s.time_spent || 0), 0);
+            const avgScore = sessions.length > 0 
+              ? Math.round(sessions.reduce((acc, s) => acc + (s.improvement_score || 50), 0) / sessions.length)
+              : 50;
 
-          // Check if studied today
-          const today = new Date().toDateString();
-          const studiedToday = sessions.some(s => new Date(s.created_at).toDateString() === today);
+            const today = new Date().toDateString();
+            const studiedToday = sessions.some(s => new Date(s.created_at).toDateString() === today);
 
-          setStats({
-            todayStudied: studiedToday,
-            totalSessions: sessions.length,
-            totalMinutes: totalTime,
-            improvementScore: avgScore,
-          });
+            setStats({
+              todayStudied: studiedToday,
+              totalSessions: sessions.length,
+              totalMinutes: totalTime,
+              improvementScore: avgScore,
+            });
 
-          // Format recent sessions
-          const recent = sessions.slice(0, 5).map((s) => ({
-            id: s.id,
-            topic: s.topic || "General Study",
-            date: formatDate(new Date(s.created_at)),
-            duration: s.time_spent || 0,
-            score: s.improvement_score || 50,
-          }));
-          setRecentSessions(recent);
+            const recent = sessions.slice(0, 5).map((s) => ({
+              id: s.id,
+              topic: s.topic || "General Study",
+              date: formatDate(new Date(s.created_at)),
+              duration: s.time_spent || 0,
+              score: s.improvement_score || 50,
+            }));
+            setRecentSessions(recent);
+          }
         }
       } else {
-        // User signed up but profile not created yet
         setUserName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Student");
+        setIsApproved(null);
       }
     } catch (error) {
       console.error("Error loading student data:", error);
@@ -291,6 +296,36 @@ const StudentDashboard = () => {
             <BookOpen className="w-6 h-6 text-primary-foreground" />
           </div>
           <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show pending approval screen
+  if (isApproved === false) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="edu-card p-8 max-w-md text-center">
+          <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-10 h-10 text-warning" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Approval Pending</h1>
+          <p className="text-muted-foreground mb-4">
+            Namaste {userName}! 👋
+          </p>
+          <p className="text-muted-foreground mb-6">
+            Aapka account abhi <strong>{schoolName}</strong> se approve hona baaki hai. 
+            Jab school aapko approve kar dega, tab aap study kar paoge.
+          </p>
+          <div className="bg-secondary/50 rounded-xl p-4 mb-6">
+            <p className="text-sm text-muted-foreground">
+              🔔 School ko inform kar diya gaya hai. Thoda wait karo!
+            </p>
+          </div>
+          <Button variant="outline" onClick={handleLogout} className="w-full">
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
+          </Button>
         </div>
       </div>
     );

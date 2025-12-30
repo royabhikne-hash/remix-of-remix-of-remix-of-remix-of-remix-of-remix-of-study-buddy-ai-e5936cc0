@@ -210,12 +210,15 @@ export type Database = {
       students: {
         Row: {
           age: number
+          approved_at: string | null
+          approved_by: string | null
           board: Database["public"]["Enums"]["board_type"]
           class: string
           created_at: string
           district: string
           full_name: string
           id: string
+          is_approved: boolean
           parent_whatsapp: string
           phone: string
           photo_url: string | null
@@ -226,12 +229,15 @@ export type Database = {
         }
         Insert: {
           age: number
+          approved_at?: string | null
+          approved_by?: string | null
           board?: Database["public"]["Enums"]["board_type"]
           class: string
           created_at?: string
           district: string
           full_name: string
           id?: string
+          is_approved?: boolean
           parent_whatsapp: string
           phone: string
           photo_url?: string | null
@@ -242,12 +248,15 @@ export type Database = {
         }
         Update: {
           age?: number
+          approved_at?: string | null
+          approved_by?: string | null
           board?: Database["public"]["Enums"]["board_type"]
           class?: string
           created_at?: string
           district?: string
           full_name?: string
           id?: string
+          is_approved?: boolean
           parent_whatsapp?: string
           phone?: string
           photo_url?: string | null

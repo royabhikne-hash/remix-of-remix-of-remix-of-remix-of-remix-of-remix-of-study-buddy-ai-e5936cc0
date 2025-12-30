@@ -13,10 +13,16 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  UserCheck,
+  UserX,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import StudentReportModal from "@/components/StudentReportModal";
+import { useToast } from "@/hooks/use-toast";
 
 interface StudentData {
   id: string;
@@ -27,17 +33,23 @@ interface StudentData {
   topicStudied: string;
   improvementTrend: "up" | "down" | "stable";
   totalSessions: number;
+  isApproved: boolean;
+  createdAt: string;
 }
 
 const SchoolDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [schoolName, setSchoolName] = useState("School");
+  const [schoolUuid, setSchoolUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<StudentData | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("approved");
 
   useEffect(() => {
     const storedSchoolName = localStorage.getItem("schoolName");
@@ -76,21 +88,26 @@ const SchoolDashboard = () => {
         return;
       }
 
+      setSchoolUuid(school.id);
+
       // Get students ONLY for this specific school
       const { data: studentsData } = await supabase
         .from("students")
         .select("*")
-        .eq("school_id", school.id);
+        .eq("school_id", school.id)
+        .order("created_at", { ascending: false });
 
       if (studentsData) {
         const today = new Date().toDateString();
         
-        // Get sessions for all students
-        const studentIds = studentsData.map(s => s.id);
-        const { data: sessions } = await supabase
-          .from("study_sessions")
-          .select("*")
-          .in("student_id", studentIds);
+        // Get sessions for approved students only
+        const approvedStudentIds = studentsData.filter(s => s.is_approved).map(s => s.id);
+        const { data: sessions } = approvedStudentIds.length > 0 
+          ? await supabase
+              .from("study_sessions")
+              .select("*")
+              .in("student_id", approvedStudentIds)
+          : { data: [] };
 
         const formattedStudents: StudentData[] = studentsData.map((student) => {
           const studentSessions = sessions?.filter(s => s.student_id === student.id) || [];
@@ -118,6 +135,8 @@ const SchoolDashboard = () => {
             topicStudied: latestSession?.topic || "-",
             improvementTrend: trend,
             totalSessions: studentSessions.length,
+            isApproved: student.is_approved,
+            createdAt: student.created_at,
           };
         });
 
@@ -127,6 +146,70 @@ const SchoolDashboard = () => {
       console.error("Error loading students:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveStudent = async (studentId: string) => {
+    setApprovingId(studentId);
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ 
+          is_approved: true, 
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", studentId);
+
+      if (error) throw error;
+
+      // Update local state
+      setStudents(prev => prev.map(s => 
+        s.id === studentId ? { ...s, isApproved: true } : s
+      ));
+
+      toast({
+        title: "Student Approved ✓",
+        description: "Student can now use the study platform.",
+      });
+    } catch (error) {
+      console.error("Error approving student:", error);
+      toast({
+        title: "Approval Failed",
+        description: "Could not approve student. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleRejectStudent = async (studentId: string) => {
+    setApprovingId(studentId);
+    try {
+      // For now, we'll just set is_approved to false (could delete in future)
+      const { error } = await supabase
+        .from("students")
+        .update({ is_approved: false })
+        .eq("id", studentId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+
+      toast({
+        title: "Student Rejected",
+        description: "Student request has been rejected.",
+      });
+    } catch (error) {
+      console.error("Error rejecting student:", error);
+      toast({
+        title: "Rejection Failed",
+        description: "Could not reject student. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -140,18 +223,22 @@ const SchoolDashboard = () => {
     setShowReportModal(true);
   };
 
-  const filteredStudents = students.filter((student) => {
+  const pendingStudents = students.filter(s => !s.isApproved);
+  const approvedStudents = students.filter(s => s.isApproved);
+
+  const filteredStudents = approvedStudents.filter((student) => {
     const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesClass = selectedClass === "all" || student.class === selectedClass;
     return matchesSearch && matchesClass;
   });
 
-  const uniqueClasses = [...new Set(students.map((s) => s.class))];
+  const uniqueClasses = [...new Set(approvedStudents.map((s) => s.class))];
 
   const stats = {
-    totalStudents: students.length,
-    studiedToday: students.filter((s) => s.todayStudied).length,
-    improving: students.filter((s) => s.improvementTrend === "up").length,
+    totalStudents: approvedStudents.length,
+    pendingApprovals: pendingStudents.length,
+    studiedToday: approvedStudents.filter((s) => s.todayStudied).length,
+    improving: approvedStudents.filter((s) => s.improvementTrend === "up").length,
   };
 
   const getTrendLabel = (trend: "up" | "down" | "stable") => {
@@ -163,6 +250,16 @@ const SchoolDashboard = () => {
       default:
         return <span className="text-muted-foreground font-medium">Stable →</span>;
     }
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   if (loading) {
@@ -203,13 +300,23 @@ const SchoolDashboard = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="edu-card p-4 text-center">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-2">
               <Users className="w-6 h-6 text-primary" />
             </div>
             <p className="text-2xl font-bold">{stats.totalStudents}</p>
-            <p className="text-sm text-muted-foreground">Total Students</p>
+            <p className="text-sm text-muted-foreground">Approved Students</p>
+          </div>
+          <div className="edu-card p-4 text-center relative">
+            <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mx-auto mb-2">
+              <Clock className="w-6 h-6 text-warning" />
+            </div>
+            <p className="text-2xl font-bold">{stats.pendingApprovals}</p>
+            <p className="text-sm text-muted-foreground">Pending Approvals</p>
+            {stats.pendingApprovals > 0 && (
+              <span className="absolute top-2 right-2 w-3 h-3 bg-warning rounded-full animate-pulse" />
+            )}
           </div>
           <div className="edu-card p-4 text-center">
             <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mx-auto mb-2">
@@ -227,167 +334,272 @@ const SchoolDashboard = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="Search students..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <select
-            className="flex h-12 rounded-xl border border-input bg-background px-4 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
-          >
-            <option value="all">All Classes</option>
-            {uniqueClasses.map((cls) => (
-              <option key={cls} value={cls}>
-                {cls}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Tabs for Pending vs Approved */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="approved" className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4" />
+              Approved ({approvedStudents.length})
+            </TabsTrigger>
+            <TabsTrigger value="pending" className="flex items-center gap-2 relative">
+              <Clock className="w-4 h-4" />
+              Pending ({pendingStudents.length})
+              {pendingStudents.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full" />
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Student List */}
-        <div className="edu-card overflow-hidden">
-          <div className="p-4 border-b border-border bg-secondary/30">
-            <h2 className="font-bold">Student Activity</h2>
-          </div>
-          
-          {students.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No students registered yet.</p>
-              <p className="text-sm">Students will appear here once they sign up.</p>
+          {/* Pending Approvals Tab */}
+          <TabsContent value="pending" className="mt-6">
+            <div className="edu-card overflow-hidden">
+              <div className="p-4 border-b border-border bg-warning/10">
+                <h2 className="font-bold flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-warning" />
+                  Pending Student Approvals
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review and approve students to allow them access to the study platform.
+                </p>
+              </div>
+              
+              {pendingStudents.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No pending approvals!</p>
+                  <p className="text-sm">All students have been reviewed.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {pendingStudents.map((student) => (
+                    <div key={student.id} className="p-4 hover:bg-muted/30">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          {student.photo ? (
+                            <img 
+                              src={student.photo} 
+                              alt={student.name}
+                              className="w-14 h-14 rounded-full object-cover border-2 border-warning/30"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-xl font-bold border-2 border-warning/30">
+                              {student.name.charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-lg">{student.name}</p>
+                            <p className="text-sm text-muted-foreground">Class: {student.class}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Registered: {formatDate(student.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRejectStudent(student.id)}
+                            disabled={approvingId === student.id}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            {approvingId === student.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <UserX className="w-4 h-4 mr-1" />
+                                Reject
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveStudent(student.id)}
+                            disabled={approvingId === student.id}
+                            className="bg-accent hover:bg-accent/90"
+                          >
+                            {approvingId === student.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <UserCheck className="w-4 h-4 mr-1" />
+                                Approve
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left p-4 font-semibold">Student</th>
-                      <th className="text-left p-4 font-semibold">Class</th>
-                      <th className="text-left p-4 font-semibold">Today</th>
-                      <th className="text-left p-4 font-semibold">Topic Studied</th>
-                      <th className="text-left p-4 font-semibold">Trend</th>
-                      <th className="text-left p-4 font-semibold">Sessions</th>
-                      <th className="text-left p-4 font-semibold">Report</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+          </TabsContent>
+
+          {/* Approved Students Tab */}
+          <TabsContent value="approved" className="mt-6">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  placeholder="Search students..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <select
+                className="flex h-12 rounded-xl border border-input bg-background px-4 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+              >
+                <option value="all">All Classes</option>
+                {uniqueClasses.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {cls}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Student List */}
+            <div className="edu-card overflow-hidden">
+              <div className="p-4 border-b border-border bg-secondary/30">
+                <h2 className="font-bold">Student Activity</h2>
+              </div>
+              
+              {approvedStudents.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No approved students yet.</p>
+                  <p className="text-sm">Approve pending students to see them here.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left p-4 font-semibold">Student</th>
+                          <th className="text-left p-4 font-semibold">Class</th>
+                          <th className="text-left p-4 font-semibold">Today</th>
+                          <th className="text-left p-4 font-semibold">Topic Studied</th>
+                          <th className="text-left p-4 font-semibold">Trend</th>
+                          <th className="text-left p-4 font-semibold">Sessions</th>
+                          <th className="text-left p-4 font-semibold">Report</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredStudents.map((student) => (
+                          <tr key={student.id} className="border-t border-border hover:bg-muted/30">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                {student.photo ? (
+                                  <img 
+                                    src={student.photo} 
+                                    alt={student.name}
+                                    className="w-10 h-10 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
+                                    {student.name.charAt(0)}
+                                  </div>
+                                )}
+                                <span className="font-medium">{student.name}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-muted-foreground">{student.class}</td>
+                            <td className="p-4">
+                              {student.todayStudied ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-sm">
+                                  <CheckCircle className="w-4 h-4" /> Yes
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-muted-foreground text-sm">
+                                  <XCircle className="w-4 h-4" /> No
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-4 text-muted-foreground">{student.topicStudied}</td>
+                            <td className="p-4">{getTrendLabel(student.improvementTrend)}</td>
+                            <td className="p-4 font-medium">{student.totalSessions}</td>
+                            <td className="p-4">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewReport(student)}
+                                className="text-primary hover:text-primary/80"
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-border">
                     {filteredStudents.map((student) => (
-                      <tr key={student.id} className="border-t border-border hover:bg-muted/30">
-                        <td className="p-4">
+                      <div key={student.id} className="p-4">
+                        <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             {student.photo ? (
                               <img 
                                 src={student.photo} 
                                 alt={student.name}
-                                className="w-10 h-10 rounded-full object-cover"
+                                className="w-12 h-12 rounded-full object-cover"
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
+                              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
                                 {student.name.charAt(0)}
                               </div>
                             )}
-                            <span className="font-medium">{student.name}</span>
+                            <div>
+                              <p className="font-semibold">{student.name}</p>
+                              <p className="text-sm text-muted-foreground">{student.class}</p>
+                            </div>
                           </div>
-                        </td>
-                        <td className="p-4 text-muted-foreground">{student.class}</td>
-                        <td className="p-4">
                           {student.todayStudied ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-sm">
-                              <CheckCircle className="w-4 h-4" /> Yes
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-xs">
+                              <CheckCircle className="w-3 h-3" /> Studied
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-muted-foreground text-sm">
-                              <XCircle className="w-4 h-4" /> No
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs">
+                              <XCircle className="w-3 h-3" /> Not Yet
                             </span>
                           )}
-                        </td>
-                        <td className="p-4 text-muted-foreground">{student.topicStudied}</td>
-                        <td className="p-4">{getTrendLabel(student.improvementTrend)}</td>
-                        <td className="p-4 font-medium">{student.totalSessions}</td>
-                        <td className="p-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewReport(student)}
-                            className="text-primary hover:text-primary/80"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-border">
-                {filteredStudents.map((student) => (
-                  <div key={student.id} className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        {student.photo ? (
-                          <img 
-                            src={student.photo} 
-                            alt={student.name}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
-                            {student.name.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-semibold">{student.name}</p>
-                          <p className="text-sm text-muted-foreground">{student.class}</p>
                         </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                          <div>
+                            <span className="text-muted-foreground">Topic: </span>
+                            {student.topicStudied}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Trend: </span>
+                            {getTrendLabel(student.improvementTrend)}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewReport(student)}
+                          className="w-full"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View Detailed Report
+                        </Button>
                       </div>
-                      {student.todayStudied ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-xs">
-                          <CheckCircle className="w-3 h-3" /> Studied
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs">
-                          <XCircle className="w-3 h-3" /> Not Yet
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                      <div>
-                        <span className="text-muted-foreground">Topic: </span>
-                        {student.topicStudied}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Trend: </span>
-                        {getTrendLabel(student.improvementTrend)}
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewReport(student)}
-                      className="w-full"
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      View Detailed Report
-                    </Button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+                </>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Student Report Modal */}
