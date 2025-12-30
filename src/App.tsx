@@ -13,6 +13,7 @@ import StudentDashboard from "./pages/StudentDashboard";
 import SchoolDashboard from "./pages/SchoolDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentProgress from "./pages/StudentProgress";
+import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/progress" element={<StudentProgress />} />
             <Route path="/school-dashboard" element={<SchoolDashboard />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/terms" element={<TermsConditions />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

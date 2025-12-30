@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   X,
+  ClipboardList,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import StudentReportModal from "@/components/StudentReportModal";
 
 interface School {
   id: string;
@@ -43,6 +45,7 @@ interface Student {
   class: string;
   parent_whatsapp: string;
   school_name: string;
+  photo_url?: string;
 }
 
 const AdminDashboard = () => {
@@ -53,7 +56,7 @@ const AdminDashboard = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports">("schools");
+  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports" | "student-reports">("schools");
   
   // Add school modal state
   const [showAddSchool, setShowAddSchool] = useState(false);
@@ -67,6 +70,10 @@ const AdminDashboard = () => {
 
   // Send report state
   const [sendingReportFor, setSendingReportFor] = useState<string | null>(null);
+
+  // Student report modal state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     const storedAdminId = localStorage.getItem("adminId");
@@ -103,6 +110,7 @@ const AdminDashboard = () => {
           class: s.class,
           parent_whatsapp: s.parent_whatsapp,
           school_name: (s.schools as any)?.name || "No School",
+          photo_url: s.photo_url || undefined,
         }));
         setStudents(formattedStudents);
       }
@@ -218,6 +226,11 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleViewStudentReport = (student: Student) => {
+    setSelectedStudent(student);
+    setShowReportModal(true);
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/");
@@ -322,6 +335,13 @@ const AdminDashboard = () => {
           >
             <FileText className="w-4 h-4 mr-2" />
             Send Reports
+          </Button>
+          <Button
+            variant={activeTab === "student-reports" ? "default" : "outline"}
+            onClick={() => setActiveTab("student-reports")}
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Student Reports
           </Button>
         </div>
 
@@ -543,7 +563,71 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {activeTab === "student-reports" && (
+          <div className="edu-card overflow-hidden">
+            <div className="p-4 border-b border-border bg-secondary/30">
+              <h2 className="font-bold">Student Report Generator</h2>
+              <p className="text-sm text-muted-foreground">
+                View detailed study reports for any student (weekly summary, weak areas, AI feedback)
+              </p>
+            </div>
+            <div className="divide-y divide-border">
+              {filteredStudents.map((student) => (
+                <div key={student.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {student.photo_url ? (
+                      <img 
+                        src={student.photo_url} 
+                        alt={student.full_name}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-primary/20"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold">
+                        {student.full_name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-semibold">{student.full_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {student.class} • {student.school_name}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewStudentReport(student)}
+                  >
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    View Report
+                  </Button>
+                </div>
+              ))}
+              {filteredStudents.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground">
+                  No students found.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Student Report Modal */}
+      {selectedStudent && (
+        <StudentReportModal
+          isOpen={showReportModal}
+          onClose={() => {
+            setShowReportModal(false);
+            setSelectedStudent(null);
+          }}
+          studentId={selectedStudent.id}
+          studentName={selectedStudent.full_name}
+          studentPhoto={selectedStudent.photo_url}
+          studentClass={selectedStudent.class}
+        />
+      )}
     </div>
   );
 };

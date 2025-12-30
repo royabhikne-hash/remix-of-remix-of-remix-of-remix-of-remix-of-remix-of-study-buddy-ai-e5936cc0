@@ -418,6 +418,23 @@ const Signup = () => {
                 </div>
               </div>
 
+              {/* Terms & Conditions */}
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="termsAccepted"
+                  required
+                  className="mt-1 h-4 w-4 rounded border-input"
+                />
+                <label htmlFor="termsAccepted" className="text-sm text-muted-foreground">
+                  I agree to the{" "}
+                  <Link to="/terms" className="text-primary hover:underline font-medium" target="_blank">
+                    Terms & Conditions
+                  </Link>{" "}
+                  of Edu Improvement AI
+                </label>
+              </div>
+
               <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
                 {isLoading ? "Creating Account..." : "Create Account & Start Studying"}
               </Button>
