@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Image, X, Loader2, Brain, TrendingUp, AlertTriangle, Volume2, VolumeX, CheckCircle, XCircle, ThumbsUp, HelpCircle, Lightbulb, Bot, User, Mic, MicOff } from "lucide-react";
+import { Send, Image, X, Loader2, Brain, TrendingUp, AlertTriangle, Volume2, VolumeX, CheckCircle, XCircle, ThumbsUp, HelpCircle, Lightbulb, Bot, User, Mic, MicOff, Settings2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,6 +105,8 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
   const [currentTopic, setCurrentTopic] = useState("");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   // Quiz mode state
   const [isQuizMode, setIsQuizMode] = useState(false);
@@ -237,6 +241,10 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
   const speakText = async (text: string, messageId: string) => {
     // If already speaking this message, stop
     if (speakingMessageId === messageId) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       setSpeakingMessageId(null);
       return;
     }
@@ -257,7 +265,7 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ text: cleanText }),
+          body: JSON.stringify({ text: cleanText, speed: voiceSpeed }),
         }
       );
 
@@ -268,15 +276,19 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      audio.playbackRate = voiceSpeed;
+      audioRef.current = audio;
       
       audio.onended = () => {
         setSpeakingMessageId(null);
         URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
       };
       
       audio.onerror = () => {
         setSpeakingMessageId(null);
         URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
         toast({
           title: "Audio Error",
           description: "Could not play audio",
@@ -637,6 +649,39 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Voice Speed Control */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-muted-foreground hover:text-foreground h-8 px-2 gap-1"
+              >
+                <Settings2 className="w-4 h-4" />
+                <span className="text-xs">{voiceSpeed}x</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-4" align="end">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Voice Speed</span>
+                  <span className="text-sm text-muted-foreground">{voiceSpeed}x</span>
+                </div>
+                <Slider
+                  value={[voiceSpeed]}
+                  onValueChange={(val) => setVoiceSpeed(val[0])}
+                  min={0.5}
+                  max={1.5}
+                  step={0.1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Slow</span>
+                  <span>Fast</span>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button 
             variant="ghost" 
             size="sm" 
