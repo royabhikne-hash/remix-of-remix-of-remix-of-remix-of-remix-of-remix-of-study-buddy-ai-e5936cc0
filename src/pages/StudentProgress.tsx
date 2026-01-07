@@ -468,35 +468,45 @@ const StudentProgress = () => {
   const gradeInfo = calculateGrade();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Professional Header */}
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="hover:bg-primary/10">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <div>
-                <span className="font-bold text-lg">Progress Report</span>
-                <p className="text-xs text-muted-foreground">{studentName}</p>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">Progress Report</h1>
+                  <p className="text-sm text-muted-foreground">{studentName} • Class {studentClass}</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div 
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                style={{ backgroundColor: gradeInfo.color }}
-              >
-                {gradeInfo.grade}
+            <div className="flex items-center gap-4">
+              {/* Grade Badge */}
+              <div className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-muted/50 to-muted/30 border border-border/50">
+                <div 
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                  style={{ backgroundColor: gradeInfo.color }}
+                >
+                  {gradeInfo.grade}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Overall Grade</p>
+                  <p className="font-semibold text-sm">{gradeInfo.label}</p>
+                </div>
               </div>
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={handleDownloadPdf}
                 disabled={downloadingPdf}
+                className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary shadow-md"
               >
                 {downloadingPdf ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -513,6 +523,22 @@ const StudentProgress = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Mobile Grade Badge */}
+        <div className="sm:hidden mb-6 flex justify-center">
+          <div className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-card border border-border shadow-sm">
+            <div 
+              className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              style={{ backgroundColor: gradeInfo.color }}
+            >
+              {gradeInfo.grade}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Overall Grade</p>
+              <p className="font-bold text-lg">{gradeInfo.label}</p>
+            </div>
+          </div>
+        </div>
+
         {/* Overall Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
           <StatCard
@@ -897,17 +923,17 @@ const StatCard = ({
   highlight?: boolean;
 }) => {
   const colorClasses = {
-    primary: "bg-primary/10 text-primary",
-    accent: "bg-accent/10 text-accent",
+    primary: "bg-gradient-to-br from-primary/15 to-primary/5 text-primary",
+    accent: "bg-gradient-to-br from-accent/15 to-accent/5 text-accent",
   };
 
   return (
-    <div className={`edu-card p-4 ${highlight ? "ring-2 ring-accent ring-offset-2" : ""}`}>
-      <div className={`w-10 h-10 rounded-lg ${colorClasses[color]} flex items-center justify-center mb-3`}>
+    <div className={`edu-card p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg ${highlight ? "ring-2 ring-accent ring-offset-2 ring-offset-background" : ""}`}>
+      <div className={`w-10 h-10 rounded-xl ${colorClasses[color]} flex items-center justify-center mb-3 shadow-sm`}>
         {icon}
       </div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-bold mt-1 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">{value}</p>
     </div>
   );
 };

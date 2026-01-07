@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import SoundWave from "@/components/SoundWave";
 import VoiceInputIndicator from "@/components/VoiceInputIndicator";
 import Confetti from "@/components/Confetti";
+import TypingText from "@/components/TypingText";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -52,6 +53,7 @@ interface ChatMessage {
   timestamp: Date;
   imageUrl?: string;
   reactions?: Record<ReactionType, MessageReaction>;
+  isTyping?: boolean;
 }
 
 interface RealTimeAnalysis {
@@ -122,6 +124,7 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
   const [showExplanation, setShowExplanation] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [hasPlayedWelcome, setHasPlayedWelcome] = useState(false);
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   
   // Real-time analysis state
   const [analysis, setAnalysis] = useState<RealTimeAnalysis>({
@@ -496,14 +499,17 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
 
     const aiResponseText = await getAIResponse(newMessages);
     
+    const aiResponseId = (Date.now() + 1).toString();
     const aiResponse: ChatMessage = {
-      id: (Date.now() + 1).toString(),
+      id: aiResponseId,
       role: "assistant",
       content: aiResponseText,
       timestamp: new Date(),
+      isTyping: true,
     };
     
     setMessages((prev) => [...prev, aiResponse]);
+    setTypingMessageId(aiResponseId);
     
     if (sessId) {
       await saveMessageToDb(aiResponse, sessId);
@@ -511,11 +517,21 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
     
     setIsLoading(false);
     
-    // Auto-speak AI response
-    if (autoSpeak && aiResponseText) {
+    // Auto-speak AI response after typing completes
+    // (handled in typing complete callback)
+  };
+  
+  const handleTypingComplete = (messageId: string, content: string) => {
+    setTypingMessageId(null);
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId ? { ...msg, isTyping: false } : msg
+    ));
+    
+    // Auto-speak after typing is complete
+    if (autoSpeak && content) {
       setTimeout(() => {
-        speakText(aiResponseText, aiResponse.id);
-      }, 300);
+        speakText(content, messageId);
+      }, 200);
     }
   };
 
@@ -845,9 +861,17 @@ const StudyChat = ({ onEndStudy, studentId }: StudyChatProps) => {
                     />
                   )}
                   
-                  <p className="text-foreground whitespace-pre-wrap leading-relaxed">
-                    {message.content}
-                  </p>
+                  <div className="text-foreground whitespace-pre-wrap leading-relaxed">
+                    {!isUser && message.isTyping && typingMessageId === message.id ? (
+                      <TypingText 
+                        text={message.content} 
+                        speed={12}
+                        onComplete={() => handleTypingComplete(message.id, message.content)}
+                      />
+                    ) : (
+                      message.content
+                    )}
+                  </div>
                   
                   {/* AI message actions */}
                   {!isUser && (
