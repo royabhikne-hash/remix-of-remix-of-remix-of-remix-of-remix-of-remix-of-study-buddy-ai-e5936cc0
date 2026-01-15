@@ -10,13 +10,31 @@ interface ChatMessage {
   content: string;
 }
 
+// In-memory rate limiting
+const rateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string, maxRequests = 10, windowMs = 300000): boolean {
+  const now = Date.now();
+  const key = `quiz:${userId}`;
+  const limit = rateLimits.get(key);
+  
+  if (!limit || now > limit.resetAt) {
+    rateLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  
+  if (limit.count >= maxRequests) return false;
+  limit.count++;
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, topic, studentLevel, weakAreas, strongAreas } = await req.json();
+    const { messages, topic, studentLevel, weakAreas, strongAreas, studentId } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -24,162 +42,108 @@ serve(async (req) => {
       throw new Error("AI service is not configured");
     }
 
+    // Rate limit check (10 quizzes per 5 minutes)
+    if (studentId && !checkRateLimit(studentId)) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please wait before generating another quiz.",
+          success: false
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("Generating adaptive quiz for topic:", topic);
     console.log("Student level:", studentLevel);
-    console.log("Weak areas:", weakAreas);
-    console.log("Strong areas:", strongAreas);
-    console.log("Chat messages count:", messages?.length || 0);
 
-    // Build context from chat messages
+    // Build context from chat messages (limited)
     const chatContext = messages
       ?.filter((m: ChatMessage) => m.role === "user" || m.role === "assistant")
+      .slice(-4)
       .map((m: ChatMessage) => `${m.role}: ${m.content}`)
       .join("\n")
-      .slice(-4000); // Limit context size
+      .slice(-2000);
 
     const weakAreasText = weakAreas?.length > 0 ? weakAreas.join(", ") : "None identified";
     const strongAreasText = strongAreas?.length > 0 ? strongAreas.join(", ") : "None identified";
 
-    const systemPrompt = `You are an adaptive quiz generator for Indian students. Generate PERSONALIZED quiz questions based on the study session.
+    // Simplified prompt for faster generation
+    const systemPrompt = `You are a quiz generator for Indian students. Generate 5 quick quiz questions based on the study session.
 
-ADAPTIVE LEARNING APPROACH:
-- Focus 50% questions on WEAK AREAS to help student improve: ${weakAreasText}
-- Include 30% questions on STRONG AREAS to build confidence: ${strongAreasText}
-- Add 20% new challenging questions to extend learning
-
-IMPORTANT RULES:
-1. Generate exactly 12 questions (comprehensive quiz for thorough assessment)
-2. Questions should be based on what was discussed in the chat
-3. Mix question types: MCQ (50%), True/False (25%), Short answer (25%)
-4. Difficulty distribution for ${studentLevel || "average"} level:
-   - If weak: 4 easy, 5 medium, 3 hard
-   - If average: 3 easy, 5 medium, 4 hard
-   - If good/excellent: 2 easy, 4 medium, 6 hard
-5. Questions should test UNDERSTANDING, not just memory
-6. Use simple Hinglish - like talking to a friend
-7. Make questions relevant and practical
-8. For short answer questions, provide MULTIPLE acceptable answers (synonyms, Hindi equivalents, etc.)
-
-QUESTION STYLE EXAMPLES:
-- WRONG: "What is the formula for velocity?"
-- RIGHT: "Agar ek car 100km 2 hours mein travel karti hai, toh uski speed kya hogi?"
-
-- WRONG: "Define photosynthesis"
-- RIGHT: "Plants ko sunlight kyun chahiye? Kya process hoti hai isse?"
-
-SHORT ANSWER FLEXIBILITY:
-- For "What is photosynthesis?", accept: "plants making food", "food making process in plants", "paudhon mein khaana banana", etc.
-- Always include 3-4 acceptable_answers variations
+RULES:
+1. Generate exactly 5 questions (mix of MCQ and True/False only)
+2. Focus on weak areas: ${weakAreasText}
+3. Use simple Hinglish like talking to a friend
+4. Questions should test understanding, not just memory
 
 OUTPUT FORMAT (strictly JSON):
 {
   "questions": [
     {
       "id": 1,
-      "type": "mcq" | "true_false" | "short_answer",
-      "question": "Question in simple Hinglish",
-      "options": ["A", "B", "C", "D"] (only for mcq),
+      "type": "mcq" | "true_false",
+      "question": "Simple Hinglish question?",
+      "options": ["A", "B", "C", "D"],
       "correct_answer": "The correct answer",
-      "acceptable_answers": ["answer1", "answer2", "hindi answer", "synonym"] (for short_answer - multiple valid answers),
-      "explanation": "Simple explanation in Hinglish - like talking to a friend",
+      "explanation": "Brief explanation in Hinglish",
       "difficulty": "easy" | "medium" | "hard",
-      "topic": "Specific topic being tested",
-      "targets_weak_area": true | false,
-      "key_concept": "The main concept this question tests"
+      "topic": "Topic name"
     }
   ],
-  "total_questions": 12,
-  "adaptive_focus": "Description of how quiz adapts to student needs",
-  "difficulty_distribution": { "easy": X, "medium": Y, "hard": Z }
+  "total_questions": 5
 }
 
-STUDY SESSION CONTEXT:
-${chatContext || "General study session on " + (topic || "various topics")}
+STUDY SESSION:
+${chatContext || "General study on " + (topic || "various topics")}`;
 
-Generate 12 adaptive questions that will thoroughly assess and help this student learn better.`;
+    // Use fastest model
+    const MODEL = "google/gemini-2.5-flash";
 
-    const PRIMARY_MODEL = "openai/gpt-5-mini";
-    const FALLBACK_MODEL = "google/gemini-3-flash-preview";
+    console.log(`Calling Lovable AI for quiz with model: ${MODEL}`);
 
-    const quizMessages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Generate quiz questions for the study session on "${topic || 'General Study'}". The student's understanding level is ${studentLevel || 'average'}.` }
-    ];
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Generate 5 quiz questions for "${topic || 'General Study'}". Student level: ${studentLevel || 'average'}.` }
+        ],
+        max_tokens: 1500,
+      }),
+    });
 
-    const callLovableAI = async (model: string) => {
-      const body: Record<string, unknown> = {
-        model,
-        messages: quizMessages,
-      };
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error("AI gateway error:", resp.status, errorText);
 
-      // OpenAI GPT-5 models require max_completion_tokens (not max_tokens)
-      if (model.startsWith("openai/")) {
-        body.max_completion_tokens = 3000;
-      } else {
-        body.max_tokens = 3000;
+      if (resp.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment.", success: false }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      console.log(`Calling Lovable AI for quiz with model: ${model}`);
-
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error("AI gateway error:", resp.status, errorText);
-
-        if (resp.status === 429) {
-          return { errorResponse: new Response(
-            JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )};
-        }
-
-        if (resp.status === 402) {
-          return { errorResponse: new Response(
-            JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )};
-        }
-
-        throw new Error(`AI service error: ${resp.status}`);
+      if (resp.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted.", success: false }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      const data = await resp.json();
-      return { data };
-    };
-
-    let data: any;
-
-    // 1) Primary call (GPT-5-mini)
-    {
-      const result = await callLovableAI(PRIMARY_MODEL);
-      if (result.errorResponse) return result.errorResponse;
-      data = result.data;
+      throw new Error(`AI service error: ${resp.status}`);
     }
 
+    const data = await resp.json();
     let aiResponse = data?.choices?.[0]?.message?.content;
 
-    // 2) If model returns empty content, retry with fallback model
     if (typeof aiResponse !== "string" || aiResponse.trim().length === 0) {
-      console.error("No response content from primary AI, trying fallback:", data);
-
-      const result2 = await callLovableAI(FALLBACK_MODEL);
-      if (result2.errorResponse) return result2.errorResponse;
-
-      const data2 = result2.data;
-      aiResponse = data2?.choices?.[0]?.message?.content;
-
-      if (typeof aiResponse !== "string" || aiResponse.trim().length === 0) {
-        console.error("No response content from fallback AI:", data2);
-        throw new Error("No response from AI");
-      }
+      console.error("No response content from AI");
+      throw new Error("No response from AI");
     }
 
     console.log("Quiz generation response received");
@@ -187,7 +151,6 @@ Generate 12 adaptive questions that will thoroughly assess and help this student
     // Extract JSON from response
     let quizData;
     try {
-      // Try to find JSON in the response
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         quizData = JSON.parse(jsonMatch[0]);
@@ -202,17 +165,25 @@ Generate 12 adaptive questions that will thoroughly assess and help this student
           {
             id: 1,
             type: "mcq",
-            question: `${topic || "Is session"} ke baare mein sabse important point kya hai?`,
+            question: `${topic || "Is session"} mein sabse important concept kya tha?`,
             options: ["Option A", "Option B", "Option C", "Option D"],
             correct_answer: "Option A",
             explanation: "Ye session ka main concept hai.",
             difficulty: "medium",
             topic: topic || "General"
+          },
+          {
+            id: 2,
+            type: "true_false",
+            question: "Kya aapne is topic ko achhe se samjha?",
+            options: ["True", "False"],
+            correct_answer: "True",
+            explanation: "Practice se samajh aur better hogi!",
+            difficulty: "easy",
+            topic: topic || "General"
           }
         ],
-        total_questions: 1,
-        topics_covered: [topic || "General"],
-        difficulty_distribution: { easy: 0, medium: 1, hard: 0 }
+        total_questions: 2
       };
     }
 

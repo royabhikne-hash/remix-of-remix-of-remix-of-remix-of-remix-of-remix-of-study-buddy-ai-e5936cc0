@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_rate_limits: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          request_count: number | null
+          user_id: string
+          window_start: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          user_id: string
+          window_start?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          user_id?: string
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -318,6 +345,13 @@ export type Database = {
             referencedRelation: "schools"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "students_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       study_sessions: {
@@ -384,10 +418,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      schools_public: {
+        Row: {
+          created_at: string | null
+          district: string | null
+          fee_paid: boolean | null
+          id: string | null
+          is_banned: boolean | null
+          name: string | null
+          school_id: string | null
+          state: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          district?: string | null
+          fee_paid?: boolean | null
+          id?: string | null
+          is_banned?: boolean | null
+          name?: string | null
+          school_id?: string | null
+          state?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          district?: string | null
+          fee_paid?: boolean | null
+          id?: string | null
+          is_banned?: boolean | null
+          name?: string | null
+          school_id?: string | null
+          state?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      check_ai_rate_limit: {
+        Args: {
+          p_action: string
+          p_max_requests?: number
+          p_user_id: string
+          p_window_minutes?: number
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       admin_role: "super_admin" | "admin"

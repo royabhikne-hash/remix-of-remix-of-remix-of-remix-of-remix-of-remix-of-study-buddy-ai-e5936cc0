@@ -6,6 +6,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// In-memory rate limiting (per isolate)
+const rateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string, maxRequests = 30, windowMs = 60000): boolean {
+  const now = Date.now();
+  const key = `chat:${userId}`;
+  const limit = rateLimits.get(key);
+  
+  if (!limit || now > limit.resetAt) {
+    rateLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  
+  if (limit.count >= maxRequests) return false;
+  limit.count++;
+  return true;
+}
+
 const buildSystemPrompt = (pastSessions: any[], weakAreas: string[], strongAreas: string[]) => {
   let personalizedContext = "";
   
@@ -78,13 +96,7 @@ When analyzing uploaded images of notes/books:
 4. Connect to what they should know for exams
 5. Link to previously studied related topics
 
-Keep responses concise (under 200 words usually) but helpful. Always end with encouragement or a question to keep them engaged.
-
-Example responses:
-- Dekhiye, ye topic thoda tricky hai but aap chinta mat kijiye, main explain karta hoon...
-- Ji, ye formula yaad rakhiyega, exam mein zaroor aayega!
-- Bahut achha! Ab bataiye, aapne jo padha usme sabse important cheez kya lagi?
-- Achha ji, aap pichle hafte bhi ye topic padh rahe the, ab revise karte hain!`;
+Keep responses concise (under 150 words usually) but helpful. Always end with encouragement or a question to keep them engaged.`;
 };
 
 interface ChatMessage {
@@ -112,6 +124,17 @@ serve(async (req) => {
       throw new Error("AI service is not configured");
     }
 
+    // Rate limit check
+    if (studentId && !checkRateLimit(studentId)) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please wait a moment before sending more messages.",
+          response: "Thoda ruko ji! Bahut fast messages aa rahe hain. Ek minute mein try karo. 🙏"
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("Processing study chat request with", messages?.length || 0, "messages");
 
     // Fetch student's past sessions for personalization
@@ -130,7 +153,7 @@ serve(async (req) => {
           .select("topic, subject, understanding_level, weak_areas, strong_areas, created_at")
           .eq("student_id", studentId)
           .order("created_at", { ascending: false })
-          .limit(20);
+          .limit(10);
 
         if (sessions) {
           pastSessions = sessions;
@@ -178,9 +201,10 @@ Keep topics short (2-3 words max).` : "";
       { role: "system", content: systemPrompt + analysisInstruction },
     ];
 
-    // Add conversation history
+    // Add conversation history (limit to last 6 messages for speed)
     if (messages && Array.isArray(messages)) {
-      for (const msg of messages as ChatMessage[]) {
+      const recentMessages = messages.slice(-6);
+      for (const msg of recentMessages as ChatMessage[]) {
         if (msg.imageUrl) {
           chatMessages.push({
             role: msg.role,
@@ -198,22 +222,11 @@ Keep topics short (2-3 words max).` : "";
       }
     }
 
-    const PRIMARY_MODEL = "openai/gpt-5-mini";
-    const FALLBACK_MODEL = "google/gemini-3-flash-preview";
+    // Use faster model as primary
+    const PRIMARY_MODEL = "google/gemini-2.5-flash";
+    const FALLBACK_MODEL = "google/gemini-2.5-flash-lite";
 
     const callLovableAI = async (model: string) => {
-      const body: Record<string, unknown> = {
-        model,
-        messages: chatMessages,
-      };
-
-      // OpenAI GPT-5 models require max_completion_tokens (not max_tokens)
-      if (model.startsWith("openai/")) {
-        body.max_completion_tokens = 1500;
-      } else {
-        body.max_tokens = 1000;
-      }
-
       console.log(`Calling Lovable AI with model: ${model}`);
 
       const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -222,7 +235,11 @@ Keep topics short (2-3 words max).` : "";
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          model,
+          messages: chatMessages,
+          max_tokens: 800,
+        }),
       });
 
       if (!resp.ok) {
@@ -252,19 +269,18 @@ Keep topics short (2-3 words max).` : "";
 
     let data: any;
 
-    // 1) Primary call (GPT-5-mini)
+    // Primary call (Gemini Flash - faster)
     {
       const result = await callLovableAI(PRIMARY_MODEL);
-      // callLovableAI can return an early Response (429/402)
       if (result instanceof Response) return result;
       data = result.data;
     }
 
     let aiResponse = data?.choices?.[0]?.message?.content;
 
-    // 2) If model returns empty content (can happen when it uses the token budget for reasoning), retry with a fast fallback model.
+    // Fallback if empty
     if (typeof aiResponse !== "string" || aiResponse.trim().length === 0) {
-      console.error("No response content from AI:", data);
+      console.error("No response content from primary AI, trying fallback");
 
       const result2 = await callLovableAI(FALLBACK_MODEL);
       if (result2 instanceof Response) return result2;
@@ -273,7 +289,7 @@ Keep topics short (2-3 words max).` : "";
       aiResponse = data2?.choices?.[0]?.message?.content;
 
       if (typeof aiResponse !== "string" || aiResponse.trim().length === 0) {
-        console.error("No response content from fallback AI:", data2);
+        console.error("No response content from fallback AI");
         throw new Error("No response from AI");
       }
     }
@@ -313,7 +329,7 @@ Keep topics short (2-3 words max).` : "";
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "An error occurred",
-        response: "Oops! Kuch technical problem ho gaya. Thodi der baad try karo, bhai! 🙏"
+        response: "Oops! Kuch technical problem ho gaya. Thodi der baad try karo! 🙏"
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
