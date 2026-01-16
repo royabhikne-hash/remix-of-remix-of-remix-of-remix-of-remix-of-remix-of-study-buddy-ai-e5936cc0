@@ -46,6 +46,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import StudentReportModal from "@/components/StudentReportModal";
+import { useLanguage } from "@/contexts/LanguageContext";
+import LanguageToggle from "@/components/LanguageToggle";
 
 interface School {
   id: string;
@@ -74,6 +76,7 @@ interface Student {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [adminName, setAdminName] = useState("Admin");
   const [schools, setSchools] = useState<School[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -130,17 +133,42 @@ const AdminDashboard = () => {
     try {
       // Use edge function to bypass RLS and get all data for admin
       const sessionToken = localStorage.getItem("adminSessionToken");
-      const adminId = localStorage.getItem("adminId");
+      
+      if (!sessionToken) {
+        toast({
+          title: t('msg.error'),
+          description: "Session expired. Please login again.",
+          variant: "destructive",
+        });
+        navigate("/admin-login");
+        return;
+      }
       
       const { data, error } = await supabase.functions.invoke("get-students", {
         body: {
           user_type: "admin",
-          session_token: `admin_${adminId}_${sessionToken}`,
+          session_token: sessionToken,
         },
       });
 
       if (error) {
         console.error("Error fetching data:", error);
+        toast({
+          title: t('msg.error'),
+          description: "Failed to load data. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
+      if (data?.error) {
+        if (data.error.includes("expired") || data.error.includes("Invalid")) {
+          localStorage.clear();
+          navigate("/admin-login");
+          return;
+        }
+        console.error("Data error:", data.error);
         setLoading(false);
         return;
       }

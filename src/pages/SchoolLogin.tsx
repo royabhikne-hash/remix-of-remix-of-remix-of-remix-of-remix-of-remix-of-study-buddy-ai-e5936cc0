@@ -6,10 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Building2, ArrowLeft, Eye, EyeOff, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
+import LanguageToggle from "@/components/LanguageToggle";
 
 const SchoolLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [schoolId, setSchoolId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,16 +27,16 @@ const SchoolLogin = () => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       toast({
-        title: "Passwords Don't Match",
-        description: "Please ensure both passwords are identical.",
+        title: t('msg.passwordsMismatch'),
+        description: t('msg.passwordsMismatch'),
         variant: "destructive",
       });
       return;
     }
     if (newPassword.length < 8) {
       toast({
-        title: "Password Too Short",
-        description: "Password must be at least 8 characters.",
+        title: t('msg.passwordTooShort'),
+        description: t('msg.passwordTooShort'),
         variant: "destructive",
       });
       return;
@@ -53,22 +56,17 @@ const SchoolLogin = () => {
         throw new Error(data?.error || "Password reset failed");
       }
 
-      // Update session token
-      sessionStorage.setItem("schoolSession", JSON.stringify({
-        ...JSON.parse(sessionStorage.getItem("schoolSession") || "{}"),
-        sessionToken: data.sessionToken,
-      }));
       localStorage.setItem("schoolSessionToken", data.sessionToken);
 
       toast({
-        title: "Password Updated!",
-        description: "Your password has been securely updated.",
+        title: t('msg.success'),
+        description: "Password updated successfully!",
       });
       navigate("/school-dashboard");
     } catch (error) {
       console.error("Password reset error:", error);
       toast({
-        title: "Reset Failed",
+        title: t('msg.error'),
         description: "An error occurred. Please try again.",
         variant: "destructive",
       });
@@ -85,7 +83,7 @@ const SchoolLogin = () => {
         body: {
           action: "login",
           userType: "school",
-          identifier: schoolId,
+          identifier: schoolId.trim(),
           password: password,
         },
       });
@@ -107,7 +105,7 @@ const SchoolLogin = () => {
 
       if (data.error) {
         toast({
-          title: "Login Failed",
+          title: t('msg.error'),
           description: data.error,
           variant: "destructive",
         });
@@ -116,36 +114,25 @@ const SchoolLogin = () => {
       }
 
       if (data.success) {
-        // Store session securely
-        sessionStorage.setItem("schoolSession", JSON.stringify({
-          id: data.user.id,
-          schoolId: data.user.schoolId,
-          name: data.user.name,
-          feePaid: data.user.feePaid,
-          sessionToken: data.sessionToken,
-          timestamp: Date.now(),
-        }));
-        
         localStorage.setItem("userType", "school");
         localStorage.setItem("schoolId", data.user.schoolId);
         localStorage.setItem("schoolUUID", data.user.id);
         localStorage.setItem("schoolName", data.user.name);
         localStorage.setItem("schoolSessionToken", data.sessionToken);
 
-        // Check if password reset is required
         if (data.requiresPasswordReset) {
           setSessionToken(data.sessionToken);
           setRequiresPasswordReset(true);
           toast({
-            title: "Password Reset Required",
-            description: "Please set a new secure password to continue.",
+            title: t('auth.passwordResetRequired'),
+            description: t('auth.mustResetPassword'),
           });
           setIsLoading(false);
           return;
         }
         
         toast({
-          title: "Welcome!",
+          title: t('dashboard.welcome') + "!",
           description: "School dashboard access granted.",
         });
         navigate("/school-dashboard");
@@ -153,7 +140,7 @@ const SchoolLogin = () => {
     } catch (error) {
       console.error("Login error:", error);
       toast({
-        title: "Login Failed",
+        title: t('msg.error'),
         description: "An error occurred. Please try again.",
         variant: "destructive",
       });
@@ -164,15 +151,14 @@ const SchoolLogin = () => {
 
   return (
     <div className="min-h-screen hero-gradient flex flex-col">
-      {/* Header */}
-      <header className="container mx-auto py-6 px-4">
+      <header className="container mx-auto py-6 px-4 flex justify-between items-center">
         <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
-          Back to Home
+          {t('nav.home')}
         </Link>
+        <LanguageToggle />
       </header>
 
-      {/* Login Form */}
       <main className="flex-1 container mx-auto px-4 flex items-center justify-center py-8">
         <div className="w-full max-w-md">
           <div className="edu-card p-8">
@@ -180,7 +166,7 @@ const SchoolLogin = () => {
               <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center mx-auto mb-4">
                 <Building2 className="w-8 h-8 text-accent-foreground" />
               </div>
-              <h1 className="text-2xl font-bold">School Login</h1>
+              <h1 className="text-2xl font-bold">{t('auth.schoolLogin')}</h1>
               <p className="text-muted-foreground mt-2">Access your school dashboard</p>
             </div>
 
@@ -206,11 +192,11 @@ const SchoolLogin = () => {
               <form onSubmit={handlePasswordReset} className="space-y-5">
                 <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-4">
                   <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    Your password needs to be updated for security reasons.
+                    {t('auth.mustResetPassword')}
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="newPassword">New Password</Label>
+                  <Label htmlFor="newPassword">{t('auth.newPassword')}</Label>
                   <div className="relative">
                     <Input
                       id="newPassword"
@@ -224,7 +210,7 @@ const SchoolLogin = () => {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -243,14 +229,14 @@ const SchoolLogin = () => {
                     </button>
                   </div>
                 </div>
-                <Button type="submit" variant="accent" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Updating..." : "Set New Password"}
+                <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg" disabled={isLoading}>
+                  {isLoading ? t('auth.updating') : t('auth.updatePassword')}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleLogin} className="space-y-5">
                 <div>
-                  <Label htmlFor="schoolId">School ID</Label>
+                  <Label htmlFor="schoolId">{t('auth.schoolId')}</Label>
                   <Input
                     id="schoolId"
                     placeholder="Enter your School ID"
@@ -261,7 +247,7 @@ const SchoolLogin = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('auth.password')}</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -281,18 +267,18 @@ const SchoolLogin = () => {
                   </div>
                 </div>
 
-                <Button type="submit" variant="accent" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Logging in..." : "Access Dashboard"}
+                <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg" disabled={isLoading}>
+                  {isLoading ? t('auth.loggingIn') : t('nav.dashboard')}
                 </Button>
               </form>
             )}
 
             <div className="mt-6 pt-4 border-t border-border text-center space-y-3">
               <Link to="/login" className="text-sm text-muted-foreground hover:text-primary block">
-                Student? Login here →
+                {t('auth.loginAsStudent')} →
               </Link>
               <Link to="/admin-login" className="text-sm text-muted-foreground hover:text-destructive block">
-                Admin Login →
+                {t('auth.loginAsAdmin')} →
               </Link>
             </div>
           </div>

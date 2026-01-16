@@ -6,10 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Shield, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
+import LanguageToggle from "@/components/LanguageToggle";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,16 +27,16 @@ const AdminLogin = () => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       toast({
-        title: "Passwords Don't Match",
-        description: "Please ensure both passwords are identical.",
+        title: t('msg.passwordsMismatch'),
+        description: t('msg.passwordsMismatch'),
         variant: "destructive",
       });
       return;
     }
     if (newPassword.length < 8) {
       toast({
-        title: "Password Too Short",
-        description: "Password must be at least 8 characters.",
+        title: t('msg.passwordTooShort'),
+        description: t('msg.passwordTooShort'),
         variant: "destructive",
       });
       return;
@@ -54,21 +57,17 @@ const AdminLogin = () => {
       }
 
       // Update session token
-      sessionStorage.setItem("adminSession", JSON.stringify({
-        ...JSON.parse(sessionStorage.getItem("adminSession") || "{}"),
-        sessionToken: data.sessionToken,
-      }));
       localStorage.setItem("adminSessionToken", data.sessionToken);
 
       toast({
-        title: "Password Updated!",
-        description: "Your password has been securely updated.",
+        title: t('msg.success'),
+        description: "Password updated successfully!",
       });
       navigate("/admin-dashboard");
     } catch (error) {
       console.error("Password reset error:", error);
       toast({
-        title: "Reset Failed",
+        title: t('msg.error'),
         description: "An error occurred. Please try again.",
         variant: "destructive",
       });
@@ -85,7 +84,7 @@ const AdminLogin = () => {
         body: {
           action: "login",
           userType: "admin",
-          identifier: adminId,
+          identifier: adminId.trim(),
           password: password,
         },
       });
@@ -116,16 +115,7 @@ const AdminLogin = () => {
       }
 
       if (data.success) {
-        // Store session securely
-        sessionStorage.setItem("adminSession", JSON.stringify({
-          id: data.user.id,
-          name: data.user.name,
-          role: data.user.role,
-          adminId: data.user.adminId,
-          sessionToken: data.sessionToken,
-          timestamp: Date.now(),
-        }));
-        
+        // Store session securely - only session token needed
         localStorage.setItem("userType", "admin");
         localStorage.setItem("adminId", data.user.id);
         localStorage.setItem("adminName", data.user.name);
@@ -137,15 +127,15 @@ const AdminLogin = () => {
           setSessionToken(data.sessionToken);
           setRequiresPasswordReset(true);
           toast({
-            title: "Password Reset Required",
-            description: "Please set a new secure password to continue.",
+            title: t('auth.passwordResetRequired'),
+            description: t('auth.mustResetPassword'),
           });
           setIsLoading(false);
           return;
         }
         
         toast({
-          title: "Welcome Admin!",
+          title: t('dashboard.welcome') + " Admin!",
           description: "Admin dashboard access granted.",
         });
         navigate("/admin-dashboard");
@@ -153,7 +143,7 @@ const AdminLogin = () => {
     } catch (error) {
       console.error("Login error:", error);
       toast({
-        title: "Login Failed",
+        title: t('msg.error'),
         description: "An error occurred. Please try again.",
         variant: "destructive",
       });
@@ -165,11 +155,12 @@ const AdminLogin = () => {
   return (
     <div className="min-h-screen hero-gradient flex flex-col">
       {/* Header */}
-      <header className="container mx-auto py-6 px-4">
+      <header className="container mx-auto py-6 px-4 flex justify-between items-center">
         <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
-          Back to Home
+          {t('nav.home')}
         </Link>
+        <LanguageToggle />
       </header>
 
       {/* Login Form */}
@@ -180,7 +171,7 @@ const AdminLogin = () => {
               <div className="w-16 h-16 rounded-2xl bg-destructive flex items-center justify-center mx-auto mb-4">
                 <Shield className="w-8 h-8 text-destructive-foreground" />
               </div>
-              <h1 className="text-2xl font-bold">Admin Login</h1>
+              <h1 className="text-2xl font-bold">{t('auth.adminLogin')}</h1>
               <p className="text-muted-foreground mt-2">Super Admin Access Only</p>
             </div>
 
@@ -206,11 +197,11 @@ const AdminLogin = () => {
               <form onSubmit={handlePasswordReset} className="space-y-5">
                 <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-4">
                   <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    Your password needs to be updated for security reasons.
+                    {t('auth.mustResetPassword')}
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="newPassword">New Password</Label>
+                  <Label htmlFor="newPassword">{t('auth.newPassword')}</Label>
                   <div className="relative">
                     <Input
                       id="newPassword"
@@ -224,7 +215,7 @@ const AdminLogin = () => {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -244,13 +235,13 @@ const AdminLogin = () => {
                   </div>
                 </div>
                 <Button type="submit" variant="destructive" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Updating..." : "Set New Password"}
+                  {isLoading ? t('auth.updating') : t('auth.updatePassword')}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleLogin} className="space-y-5">
                 <div>
-                  <Label htmlFor="adminId">Admin ID</Label>
+                  <Label htmlFor="adminId">{t('auth.adminId')}</Label>
                   <Input
                     id="adminId"
                     placeholder="Enter your Admin ID"
@@ -261,7 +252,7 @@ const AdminLogin = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('auth.password')}</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -282,14 +273,14 @@ const AdminLogin = () => {
                 </div>
 
                 <Button type="submit" variant="destructive" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Logging in..." : "Access Admin Panel"}
+                  {isLoading ? t('auth.loggingIn') : t('auth.enterAdmin')}
                 </Button>
               </form>
             )}
 
             <div className="mt-6 pt-4 border-t border-border text-center">
               <Link to="/school-login" className="text-sm text-muted-foreground hover:text-primary">
-                School Login →
+                {t('auth.schoolLogin')} →
               </Link>
             </div>
           </div>
