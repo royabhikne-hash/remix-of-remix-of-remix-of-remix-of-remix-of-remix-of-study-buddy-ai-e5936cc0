@@ -18,6 +18,7 @@ import StudentProgress from "./pages/StudentProgress";
 import TermsConditions from "./pages/TermsConditions";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import SchoolsDirectory from "./pages/SchoolsDirectory";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/schools" element={<SchoolsDirectory />} />
                 <Route path="/school-login" element={<SchoolLogin />} />
                 <Route path="/admin-login" element={<AdminLogin />} />
                 <Route path="/dashboard" element={<StudentDashboard />} />

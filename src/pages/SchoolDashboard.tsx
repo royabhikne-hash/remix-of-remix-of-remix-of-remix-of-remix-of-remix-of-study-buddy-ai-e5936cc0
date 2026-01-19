@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,7 @@ import StudentReportModal from "@/components/StudentReportModal";
 import { useToast } from "@/hooks/use-toast";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useDebounce } from "@/hooks/useDebounce";
 interface StudentData {
   id: string;
   photo: string;
@@ -523,23 +524,29 @@ const SchoolDashboard = () => {
     setShowReportModal(true);
   };
 
-  const pendingStudents = students.filter(s => !s.isApproved);
-  const approvedStudents = students.filter(s => s.isApproved);
+  // Debounce search for performance
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
-  const filteredStudents = approvedStudents.filter((student) => {
-    const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesClass = selectedClass === "all" || student.class === selectedClass;
-    return matchesSearch && matchesClass;
-  });
+  // Memoized filtered lists
+  const pendingStudents = useMemo(() => students.filter(s => !s.isApproved), [students]);
+  const approvedStudents = useMemo(() => students.filter(s => s.isApproved), [students]);
 
-  const uniqueClasses = [...new Set(approvedStudents.map((s) => s.class))];
+  const filteredStudents = useMemo(() => {
+    return approvedStudents.filter((student) => {
+      const matchesSearch = student.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesClass = selectedClass === "all" || student.class === selectedClass;
+      return matchesSearch && matchesClass;
+    });
+  }, [approvedStudents, debouncedSearch, selectedClass]);
 
-  const stats = {
+  const uniqueClasses = useMemo(() => [...new Set(approvedStudents.map((s) => s.class))], [approvedStudents]);
+
+  const stats = useMemo(() => ({
     totalStudents: approvedStudents.length,
     pendingApprovals: pendingStudents.length,
     studiedToday: approvedStudents.filter((s) => s.todayStudied).length,
     improving: approvedStudents.filter((s) => s.improvementTrend === "up").length,
-  };
+  }), [approvedStudents, pendingStudents]);
 
   const getTrendLabel = (trend: "up" | "down" | "stable") => {
     switch (trend) {

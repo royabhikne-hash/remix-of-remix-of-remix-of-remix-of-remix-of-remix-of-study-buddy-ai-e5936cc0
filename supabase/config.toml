@@ -15,7 +15,6 @@ verify_jwt = false
 [functions.send-weekly-report]
 verify_jwt = false
 
-
 [functions.secure-auth]
 verify_jwt = false
 
@@ -26,4 +25,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-schools-public]
+verify_jwt = false
+
+[functions.seed-schools]
 verify_jwt = false

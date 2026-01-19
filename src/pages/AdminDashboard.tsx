@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import {
   XCircle,
   Trash2,
   AlertTriangle,
+  Database,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +49,7 @@ import {
 import StudentReportModal from "@/components/StudentReportModal";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageToggle from "@/components/LanguageToggle";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface School {
   id: string;
@@ -113,6 +115,13 @@ const AdminDashboard = () => {
     name: string;
   } | null>(null);
 
+  // Seed schools state
+  const [seedingSchools, setSeedingSchools] = useState(false);
+  const [showSeedDialog, setShowSeedDialog] = useState(false);
+  const [seededSchools, setSeededSchools] = useState<{ name: string; schoolId: string; password: string }[]>([]);
+
+  // Debounced search
+  const debouncedSearch = useDebounce(searchQuery, 300);
   useEffect(() => {
     const storedAdminId = localStorage.getItem("adminId");
     const storedAdminName = localStorage.getItem("adminName");
@@ -493,22 +502,73 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
-  const filteredSchools = schools.filter((school) =>
-    school.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredSchools = useMemo(() => 
+    schools.filter((school) =>
+      school.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      school.school_id.toLowerCase().includes(debouncedSearch.toLowerCase())
+    ), [schools, debouncedSearch]);
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.school_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStudents = useMemo(() => 
+    students.filter(
+      (student) =>
+        student.full_name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        student.school_name.toLowerCase().includes(debouncedSearch.toLowerCase())
+    ), [students, debouncedSearch]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     totalStudents: students.length,
     totalSchools: schools.length,
     activeSchools: schools.filter((s) => s.studentCount > 0 && !s.is_banned && s.fee_paid).length,
     bannedSchools: schools.filter((s) => s.is_banned).length,
     unpaidSchools: schools.filter((s) => !s.fee_paid).length,
+  }), [schools, students]);
+
+  const handleSeedSchools = async () => {
+    setSeedingSchools(true);
+    try {
+      const sessionToken = localStorage.getItem("adminSessionToken");
+      
+      const { data, error } = await supabase.functions.invoke("seed-schools", {
+        body: {
+          action: "seed_default",
+          sessionToken,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (data?.created && data.created.length > 0) {
+        setSeededSchools(data.created);
+        toast({
+          title: `${data.created.length} Schools Created!`,
+          description: "Default schools have been added successfully.",
+        });
+        loadData();
+      } else if (data?.errors?.length > 0) {
+        toast({
+          title: "Some schools already exist",
+          description: data.errors.join(", "),
+        });
+      } else {
+        toast({
+          title: "No schools created",
+          description: "All default schools already exist.",
+        });
+      }
+    } catch (error) {
+      console.error("Seed schools error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to seed schools.",
+        variant: "destructive",
+      });
+    } finally {
+      setSeedingSchools(false);
+    }
   };
 
   if (loading) {
