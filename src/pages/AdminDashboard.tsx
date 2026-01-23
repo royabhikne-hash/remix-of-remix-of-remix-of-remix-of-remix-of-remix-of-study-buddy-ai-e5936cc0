@@ -25,6 +25,7 @@ import {
   Trash2,
   AlertTriangle,
   Database,
+  Trophy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -47,9 +48,23 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import StudentReportModal from "@/components/StudentReportModal";
+import StudentRanking from "@/components/StudentRanking";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useDebounce } from "@/hooks/useDebounce";
+
+interface RankingData {
+  id: string;
+  name: string;
+  photo?: string;
+  class: string;
+  schoolName?: string;
+  improvementScore: number;
+  dailyStudyTime: number;
+  weeklyStudyDays: number;
+  totalScore: number;
+  rank: number;
+}
 
 interface School {
   id: string;
@@ -84,7 +99,8 @@ const AdminDashboard = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports" | "student-reports">("schools");
+  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports" | "student-reports" | "rankings">("schools");
+  const [rankings, setRankings] = useState<RankingData[]>([]);
   
   // Add school modal state
   const [showAddSchool, setShowAddSchool] = useState(false);
@@ -202,6 +218,11 @@ const AdminDashboard = () => {
           is_approved: s.is_approved || false,
         }));
         setStudents(formattedStudents);
+        
+        // Set rankings from backend
+        if (data?.rankings) {
+          setRankings(data.rankings);
+        }
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -687,6 +708,15 @@ const AdminDashboard = () => {
             <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
             Reports
           </Button>
+          <Button
+            variant={activeTab === "rankings" ? "default" : "outline"}
+            onClick={() => setActiveTab("rankings")}
+            size="sm"
+            className="text-xs sm:text-sm whitespace-nowrap"
+          >
+            <Trophy className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            Rankings
+          </Button>
         </div>
 
         {/* Search & Actions */}
@@ -1122,6 +1152,14 @@ const AdminDashboard = () => {
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "rankings" && (
+          <StudentRanking 
+            rankings={rankings} 
+            title="🏆 Global Student Rankings"
+            showTop={50}
+          />
         )}
       </main>
 

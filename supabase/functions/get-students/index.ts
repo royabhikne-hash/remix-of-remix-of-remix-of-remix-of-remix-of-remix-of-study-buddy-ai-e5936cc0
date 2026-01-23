@@ -255,8 +255,67 @@ Deno.serve(async (req) => {
         })
       );
 
+      // Calculate rankings for all students in the school
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const startOfToday = new Date(today);
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      const rankings = studentsWithSessions.map(student => {
+        const sessions = student.study_sessions || [];
+        
+        // Average improvement score from recent sessions
+        const improvementScores = sessions
+          .map((s: any) => s.improvement_score || 50)
+          .slice(0, 10);
+        const avgImprovement = improvementScores.length > 0
+          ? Math.round(improvementScores.reduce((a: number, b: number) => a + b, 0) / improvementScores.length)
+          : 0;
+        
+        // Today's study time
+        const todaySessions = sessions.filter((s: any) => 
+          new Date(s.created_at) >= startOfToday
+        );
+        const dailyStudyTime = todaySessions.reduce((acc: number, s: any) => acc + (s.time_spent || 0), 0);
+        
+        // Unique study days this week
+        const weekSessions = sessions.filter((s: any) => 
+          new Date(s.created_at) >= startOfWeek
+        );
+        const uniqueDays = new Set(
+          weekSessions.map((s: any) => new Date(s.created_at).toDateString())
+        ).size;
+        
+        // Calculate total score (weighted formula)
+        const improvementPoints = avgImprovement * 0.4;
+        const dailyPoints = Math.min(dailyStudyTime, 120) * 0.25;
+        const consistencyPoints = (uniqueDays / 7) * 30;
+        const totalScore = Math.round(improvementPoints + dailyPoints + consistencyPoints);
+        
+        return {
+          id: student.id,
+          name: student.full_name,
+          photo: student.photo_url,
+          class: student.class,
+          improvementScore: avgImprovement,
+          dailyStudyTime,
+          weeklyStudyDays: uniqueDays,
+          totalScore,
+          rank: 0
+        };
+      });
+      
+      // Sort by total score descending and assign ranks
+      rankings.sort((a: any, b: any) => b.totalScore - a.totalScore);
+      rankings.forEach((student: any, index: number) => {
+        student.rank = index + 1;
+      });
+
       return new Response(
-        JSON.stringify({ students: studentsWithSessions, school }),
+        JSON.stringify({ students: studentsWithSessions, school, rankings }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
@@ -270,7 +329,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Fetch all students with school info
+      // Fetch all students with school info and study sessions for rankings
       const { data: students, error: studentsError } = await supabaseAdmin
         .from('students')
         .select('*, schools(name)')
@@ -298,8 +357,93 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Fetch study sessions for all students to calculate rankings
+      const studentsWithSessions = await Promise.all(
+        (students || []).map(async (student) => {
+          const { data: sessions } = await supabaseAdmin
+            .from('study_sessions')
+            .select('*, quiz_attempts(accuracy_percentage)')
+            .eq('student_id', student.id)
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          const enhancedSessions = (sessions || []).map((session: any) => {
+            const quizAttempts = session.quiz_attempts as { accuracy_percentage: number | null }[] | null;
+            const quizScore = (quizAttempts && quizAttempts.length > 0 && quizAttempts[0].accuracy_percentage !== null)
+              ? quizAttempts[0].accuracy_percentage
+              : null;
+            return {
+              ...session,
+              improvement_score: quizScore !== null ? quizScore : session.improvement_score,
+            };
+          });
+
+          return {
+            ...student,
+            study_sessions: enhancedSessions
+          };
+        })
+      );
+
+      // Calculate global rankings for all approved students
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const startOfToday = new Date(today);
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      const approvedStudentsForRanking = studentsWithSessions.filter((s: any) => s.is_approved && !s.is_banned);
+      
+      const rankings = approvedStudentsForRanking.map((student: any) => {
+        const sessions = student.study_sessions || [];
+        
+        const improvementScores = sessions
+          .map((s: any) => s.improvement_score || 50)
+          .slice(0, 10);
+        const avgImprovement = improvementScores.length > 0
+          ? Math.round(improvementScores.reduce((a: number, b: number) => a + b, 0) / improvementScores.length)
+          : 0;
+        
+        const todaySessions = sessions.filter((s: any) => 
+          new Date(s.created_at) >= startOfToday
+        );
+        const dailyStudyTime = todaySessions.reduce((acc: number, s: any) => acc + (s.time_spent || 0), 0);
+        
+        const weekSessions = sessions.filter((s: any) => 
+          new Date(s.created_at) >= startOfWeek
+        );
+        const uniqueDays = new Set(
+          weekSessions.map((s: any) => new Date(s.created_at).toDateString())
+        ).size;
+        
+        const improvementPoints = avgImprovement * 0.4;
+        const dailyPoints = Math.min(dailyStudyTime, 120) * 0.25;
+        const consistencyPoints = (uniqueDays / 7) * 30;
+        const totalScore = Math.round(improvementPoints + dailyPoints + consistencyPoints);
+        
+        return {
+          id: student.id,
+          name: student.full_name,
+          photo: student.photo_url,
+          class: student.class,
+          schoolName: student.schools?.name || 'No School',
+          improvementScore: avgImprovement,
+          dailyStudyTime,
+          weeklyStudyDays: uniqueDays,
+          totalScore,
+          rank: 0
+        };
+      });
+      
+      rankings.sort((a: any, b: any) => b.totalScore - a.totalScore);
+      rankings.forEach((student: any, index: number) => {
+        student.rank = index + 1;
+      });
+
       return new Response(
-        JSON.stringify({ students: students || [], schools: schools || [] }),
+        JSON.stringify({ students: students || [], schools: schools || [], rankings }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

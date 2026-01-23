@@ -49,6 +49,20 @@ import { useToast } from "@/hooks/use-toast";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDebounce } from "@/hooks/useDebounce";
+import StudentRanking from "@/components/StudentRanking";
+
+interface RankingData {
+  id: string;
+  name: string;
+  photo?: string;
+  class: string;
+  improvementScore: number;
+  dailyStudyTime: number;
+  weeklyStudyDays: number;
+  totalScore: number;
+  rank: number;
+}
+
 interface StudentData {
   id: string;
   photo: string;
@@ -76,6 +90,7 @@ const SchoolDashboard = () => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("approved");
+  const [rankings, setRankings] = useState<RankingData[]>([]);
   
   // Fee payment check
   const [feePaid, setFeePaid] = useState(true);
@@ -226,6 +241,11 @@ const SchoolDashboard = () => {
         });
 
         setStudents(formattedStudents);
+        
+        // Set rankings from backend
+        if (data?.rankings) {
+          setRankings(data.rankings);
+        }
       }
     } catch (error) {
       console.error("Error loading students:", error);
@@ -672,9 +692,9 @@ const SchoolDashboard = () => {
           </div>
         </div>
 
-        {/* Tabs for Pending vs Approved */}
+        {/* Tabs for Pending vs Approved vs Rankings */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="approved" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" />
               {t("student.approved")} ({approvedStudents.length})
@@ -685,6 +705,10 @@ const SchoolDashboard = () => {
               {pendingStudents.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full" />
               )}
+            </TabsTrigger>
+            <TabsTrigger value="rankings" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
+              Rankings
             </TabsTrigger>
           </TabsList>
 
@@ -1041,6 +1065,15 @@ const SchoolDashboard = () => {
                 </>
               )}
             </div>
+          </TabsContent>
+
+          {/* Rankings Tab */}
+          <TabsContent value="rankings" className="mt-4 sm:mt-6">
+            <StudentRanking 
+              rankings={rankings} 
+              title="🏆 Student Rankings"
+              showTop={20}
+            />
           </TabsContent>
         </Tabs>
       </main>
