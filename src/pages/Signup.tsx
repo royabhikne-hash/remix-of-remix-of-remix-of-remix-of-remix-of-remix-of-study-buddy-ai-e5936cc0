@@ -188,7 +188,7 @@ const Signup = () => {
 
       toast({
         title: "Account Created!",
-        description: "Welcome to EduImprove AI. Let's start studying!",
+        description: "Welcome to Study Buddy AI. Let's start studying!",
       });
       
       navigate("/dashboard");
@@ -223,7 +223,7 @@ const Signup = () => {
                 <BookOpen className="w-8 h-8 text-primary-foreground" />
               </div>
               <h1 className="text-2xl font-bold">Create Your Account</h1>
-              <p className="text-muted-foreground mt-2">Join EduImprove AI and start improving</p>
+              <p className="text-muted-foreground mt-2">Join Study Buddy AI and start improving</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -436,7 +436,7 @@ const Signup = () => {
                   <Link to="/terms" className="text-primary hover:underline font-medium" target="_blank">
                     Terms & Conditions
                   </Link>{" "}
-                  of Edu Improvement AI
+                  of Study Buddy AI
                 </label>
               </div>
 

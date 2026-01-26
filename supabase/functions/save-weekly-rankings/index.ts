@@ -5,6 +5,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Send WhatsApp notification via Twilio
+async function sendWhatsAppNotification(
+  phoneNumber: string, 
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const twilioWhatsappFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
+
+  if (!twilioSid || !twilioAuthToken || !twilioWhatsappFrom) {
+    console.log("Twilio credentials not configured");
+    return { success: false, error: "Twilio not configured" };
+  }
+
+  try {
+    const formattedPhone = phoneNumber.startsWith("+") 
+      ? phoneNumber 
+      : `+91${phoneNumber.replace(/\D/g, "").slice(-10)}`;
+
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
+    const formData = new URLSearchParams();
+    formData.append("To", `whatsapp:${formattedPhone}`);
+    formData.append("From", twilioWhatsappFrom);
+    formData.append("Body", message);
+
+    const response = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${btoa(`${twilioSid}:${twilioAuthToken}`)}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formData.toString(),
+    });
+
+    if (response.ok) {
+      console.log(`WhatsApp sent to ${formattedPhone}`);
+      return { success: true };
+    } else {
+      const errorText = await response.text();
+      console.error("Twilio error:", errorText);
+      return { success: false, error: errorText };
+    }
+  } catch (error) {
+    console.error("WhatsApp error:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
 // Calculate rankings for a list of students with sessions
 function calculateStudentRankings(studentsWithSessions: any[]) {
   const today = new Date();
@@ -192,6 +240,7 @@ Deno.serve(async (req) => {
     const rankingHistoryInserts: any[] = [];
     const achievementInserts: any[] = [];
     const notificationInserts: any[] = [];
+    const whatsappNotifications: { phone: string; message: string; studentName: string }[] = [];
 
     for (const student of studentsWithSessions) {
       const globalRank = globalRankMap.get(student.id);
@@ -236,6 +285,16 @@ Deno.serve(async (req) => {
           ranking_type: 'school',
           rank_achieved: schoolRank,
         });
+
+        // Queue WhatsApp notification for parent
+        if (student.parent_whatsapp) {
+          const rankEmoji = schoolRank === 1 ? '🥇' : schoolRank === 2 ? '🥈' : '🥉';
+          whatsappNotifications.push({
+            phone: student.parent_whatsapp,
+            studentName: student.full_name,
+            message: `${rankEmoji} *Study Buddy AI Achievement Alert!*\n\n🎉 Congratulations! Your child *${student.full_name}* has achieved *Rank #${schoolRank}* in their school this week!\n\n${titles[schoolRank - 1]}\n\nKeep encouraging them to maintain this excellent performance! 📚✨`
+          });
+        }
       }
 
       if (districtRank && districtRank <= 3) {
@@ -250,6 +309,16 @@ Deno.serve(async (req) => {
           ranking_type: 'district',
           rank_achieved: districtRank,
         });
+
+        // Queue WhatsApp notification for parent (only if not already notified for school rank)
+        if (student.parent_whatsapp && !(schoolRank && schoolRank <= 3)) {
+          const rankEmoji = districtRank === 1 ? '🏆' : districtRank === 2 ? '🥈' : '🥉';
+          whatsappNotifications.push({
+            phone: student.parent_whatsapp,
+            studentName: student.full_name,
+            message: `${rankEmoji} *Study Buddy AI Achievement Alert!*\n\n🎉 Amazing news! Your child *${student.full_name}* has achieved *Rank #${districtRank}* in ${student.district} district this week!\n\n${titles[districtRank - 1]}\n\nThis is a remarkable achievement! Keep supporting their learning journey! 📚🌟`
+          });
+        }
       }
 
       // Create notifications for rank improvements
@@ -349,6 +418,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Send WhatsApp notifications for achievements
+    let whatsappSentCount = 0;
+    if (whatsappNotifications.length > 0) {
+      console.log(`Sending ${whatsappNotifications.length} WhatsApp notifications...`);
+      
+      for (const notification of whatsappNotifications) {
+        const result = await sendWhatsAppNotification(notification.phone, notification.message);
+        if (result.success) {
+          whatsappSentCount++;
+        } else {
+          console.log(`Failed to send WhatsApp to ${notification.studentName}: ${result.error}`);
+        }
+        // Add small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      console.log(`Successfully sent ${whatsappSentCount}/${whatsappNotifications.length} WhatsApp notifications`);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -358,6 +446,7 @@ Deno.serve(async (req) => {
           rankingsSaved: rankingHistoryInserts.length,
           achievementsCreated: achievementInserts.length,
           notificationsSent: notificationInserts.length,
+          whatsappSent: whatsappSentCount,
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -119,10 +119,10 @@ const Landing = () => {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-primary" />
-            <span className="font-semibold">Edu improvement AI</span>
+            <span className="font-semibold">Study Buddy AI</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            © 2024 Edu improvement AI. Making education better.
+            © 2024 Study Buddy AI. Making education better.
           </p>
         </div>
       </footer>

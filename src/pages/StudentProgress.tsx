@@ -386,7 +386,7 @@ const StudentProgress = () => {
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(18);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Edu Improvement AI - Progress Report", margin, 15);
+      pdf.text("Study Buddy AI - Progress Report", margin, 15);
       pdf.setFontSize(10);
       pdf.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, margin, 24);
 
@@ -428,7 +428,7 @@ const StudentProgress = () => {
       pdf.rect(0, pageHeight - 12, pageWidth, 12, "F");
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(8);
-      pdf.text("Edu Improvement AI - Your Personal Study Buddy", pageWidth / 2, pageHeight - 5, { align: "center" });
+      pdf.text("Study Buddy AI - Your Personal Study Buddy", pageWidth / 2, pageHeight - 5, { align: "center" });
 
       pdf.save(`${studentName.replace(/\s+/g, "_")}_Progress_${new Date().toISOString().split("T")[0]}.pdf`);
       

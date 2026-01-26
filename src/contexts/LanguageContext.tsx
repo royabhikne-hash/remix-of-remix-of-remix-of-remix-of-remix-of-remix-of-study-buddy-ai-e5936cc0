@@ -12,7 +12,7 @@ interface Translations {
 // Common translations used across the app
 export const translations: Translations = {
   // Navigation & Common
-  'app.name': { en: 'EduImprovement AI', hi: 'EduImprovement AI' },
+  'app.name': { en: 'Study Buddy AI', hi: 'Study Buddy AI' },
   'nav.home': { en: 'Home', hi: 'होम' },
   'nav.login': { en: 'Login', hi: 'लॉगिन' },
   'nav.signup': { en: 'Sign Up', hi: 'साइन अप करो' },
