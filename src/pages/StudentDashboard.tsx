@@ -314,7 +314,7 @@ const StudentDashboard = () => {
   };
 
   const handleStartStudy = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
-    // Prevent default for touch events to avoid double-firing
+    // Prevent default and stop propagation for touch events to avoid double-firing
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -329,15 +329,16 @@ const StudentDashboard = () => {
       return;
     }
     
-    console.log("Navigating to study page...");
+    console.log("Navigating to study page via internal router...");
     
     // Use router navigation for WebView/PWA compatibility
     // This avoids window.open, popups, or external redirects
+    // Works in: Desktop, Mobile Browser, PWA, WebView, APK
     try {
       navigate("/study");
     } catch (err) {
-      console.error("Navigation error, using fallback:", err);
-      // Fallback: force location change via router
+      console.error("Router navigation error, using location fallback:", err);
+      // Fallback: force location change (works in all WebViews)
       window.location.href = "/study";
     }
   }, [isApproved, toast, navigate]);
