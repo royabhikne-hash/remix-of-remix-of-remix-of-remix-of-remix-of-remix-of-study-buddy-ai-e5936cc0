@@ -71,8 +71,13 @@ export const useNativeTTS = () => {
       .trim();
   }, []);
 
-  // Split text into smaller chunks for reliable TTS
-  const splitIntoChunks = useCallback((text: string, maxLength: number = 120): string[] => {
+  // Split text into chunks - larger chunks for smoother playback
+  const splitIntoChunks = useCallback((text: string, maxLength: number = 500): string[] => {
+    // For shorter text, don't chunk at all
+    if (text.length <= maxLength) {
+      return [text];
+    }
+    
     const sentences = text.split(/(?<=[।.!?])\s+/);
     const chunks: string[] = [];
     let currentChunk = '';
@@ -82,31 +87,7 @@ export const useNativeTTS = () => {
         currentChunk += (currentChunk ? ' ' : '') + sentence;
       } else {
         if (currentChunk) chunks.push(currentChunk);
-        // If single sentence is too long, split by commas
-        if (sentence.length > maxLength) {
-          const parts = sentence.split(/(?<=,)\s+/);
-          for (const part of parts) {
-            if (part.length > maxLength) {
-              // Force split at word boundary
-              const words = part.split(' ');
-              let subChunk = '';
-              for (const word of words) {
-                if (subChunk.length + word.length + 1 <= maxLength) {
-                  subChunk += (subChunk ? ' ' : '') + word;
-                } else {
-                  if (subChunk) chunks.push(subChunk);
-                  subChunk = word;
-                }
-              }
-              if (subChunk) chunks.push(subChunk);
-            } else {
-              chunks.push(part);
-            }
-          }
-          currentChunk = '';
-        } else {
-          currentChunk = sentence;
-        }
+        currentChunk = sentence;
       }
     }
     if (currentChunk) chunks.push(currentChunk);
@@ -238,32 +219,32 @@ export const useNativeTTS = () => {
           voice = getBestVoice();
         }
 
-        // Split into chunks for reliable playback
-        const chunks = splitIntoChunks(cleanText, 120);
+        // Use larger chunks for smoother playback
+        const chunks = splitIntoChunks(cleanText, 500);
         chunksRef.current = chunks;
         currentChunkIndexRef.current = 0;
 
         console.log(`TTS: Speaking ${chunks.length} chunks`);
         setIsSpeaking(true);
 
-        // Start heartbeat to prevent Chrome from stopping (every 8 seconds)
+        // Start heartbeat to prevent Chrome/WebView from stopping (every 12 seconds)
         heartbeatRef.current = setInterval(() => {
           if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
             window.speechSynthesis.pause();
             window.speechSynthesis.resume();
           }
-        }, 8000);
+        }, 12000);
 
-        // Speak each chunk sequentially
+        // Speak each chunk sequentially with minimal gap
         for (let i = 0; i < chunks.length; i++) {
           if (isCancelledRef.current) break;
           
           currentChunkIndexRef.current = i;
           await speakChunk(chunks[i], voice, rate, pitch, volume);
           
-          // Small gap between chunks for natural flow
+          // Minimal gap between chunks
           if (i < chunks.length - 1 && !isCancelledRef.current) {
-            await new Promise(r => setTimeout(r, 100));
+            await new Promise(r => setTimeout(r, 30));
           }
         }
 
