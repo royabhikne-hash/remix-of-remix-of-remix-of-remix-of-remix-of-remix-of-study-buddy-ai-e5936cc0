@@ -156,13 +156,23 @@ export const useNativeTTS = () => {
     return voices[0] || null;
   }, [availableVoices]);
 
-  // Speak a single chunk
-  const speakChunk = useCallback((text: string, voice: SpeechSynthesisVoice | null, rate: number, pitch: number, volume: number): Promise<void> => {
+  // Speak a single chunk with auto-retry on early stop
+  const speakChunk = useCallback((
+    text: string, 
+    voice: SpeechSynthesisVoice | null, 
+    rate: number, 
+    pitch: number, 
+    volume: number,
+    retryWithSmallerChunks: boolean = true
+  ): Promise<{ completed: boolean; stoppedEarly: boolean }> => {
     return new Promise((resolve) => {
       if (isCancelledRef.current) {
-        resolve();
+        resolve({ completed: false, stoppedEarly: false });
         return;
       }
+
+      const startTime = Date.now();
+      const minExpectedDuration = 2500; // If speech stops before 2.5 seconds, it's suspicious
 
       const utterance = new SpeechSynthesisUtterance(text);
       utteranceRef.current = utterance;
@@ -179,12 +189,21 @@ export const useNativeTTS = () => {
       utterance.volume = Math.max(0, Math.min(1, volume));
 
       utterance.onend = () => {
-        resolve();
+        const elapsed = Date.now() - startTime;
+        // If text is long but speech ended too quickly, it likely stopped early
+        const textLengthThreshold = 100; // ~100 chars should take more than 2.5s to speak
+        const stoppedEarly = text.length > textLengthThreshold && elapsed < minExpectedDuration;
+        
+        if (stoppedEarly) {
+          console.log(`TTS: Possible early stop detected (${elapsed}ms for ${text.length} chars)`);
+        }
+        
+        resolve({ completed: true, stoppedEarly });
       };
 
       utterance.onerror = (event) => {
         console.error('TTS chunk error:', event.error);
-        resolve();
+        resolve({ completed: false, stoppedEarly: false });
       };
 
       window.speechSynthesis.speak(utterance);
@@ -253,12 +272,61 @@ export const useNativeTTS = () => {
            }, 8000);
          }
 
-        // Speak each chunk sequentially with minimal gap
+        // Speak each chunk sequentially with auto-retry on early stop
+        let consecutiveEarlyStops = 0;
+        let currentChunkSize = chunkMax;
+        
         for (let i = 0; i < chunks.length; i++) {
           if (isCancelledRef.current) break;
           
           currentChunkIndexRef.current = i;
-          await speakChunk(chunks[i], voice, rate, pitch, volume);
+          const chunkText = chunks[i];
+          
+          // If we've had early stops, use smaller sub-chunks
+          if (consecutiveEarlyStops >= 1 && chunkText.length > 200) {
+            console.log(`TTS: Using smaller sub-chunks due to early stops`);
+            const subChunks = splitIntoChunks(chunkText, 200);
+            
+            for (const subChunk of subChunks) {
+              if (isCancelledRef.current) break;
+              
+              const result = await speakChunk(subChunk, voice, rate, pitch, volume, false);
+              
+              if (result.stoppedEarly) {
+                // Cancel and retry with even smaller chunk
+                window.speechSynthesis.cancel();
+                await new Promise(r => setTimeout(r, 100));
+                await speakChunk(subChunk, voice, rate, pitch, volume, false);
+              }
+              
+              if (!isCancelledRef.current) {
+                await new Promise(r => setTimeout(r, 50));
+              }
+            }
+          } else {
+            const result = await speakChunk(chunkText, voice, rate, pitch, volume, true);
+            
+            if (result.stoppedEarly) {
+              consecutiveEarlyStops++;
+              console.log(`TTS: Early stop #${consecutiveEarlyStops}, will retry remaining text with smaller chunks`);
+              
+              // Re-chunk remaining text with smaller size and retry current chunk
+              if (consecutiveEarlyStops <= 2) {
+                window.speechSynthesis.cancel();
+                await new Promise(r => setTimeout(r, 100));
+                
+                // Retry current chunk with smaller sub-chunks
+                const subChunks = splitIntoChunks(chunkText, 200);
+                for (const subChunk of subChunks) {
+                  if (isCancelledRef.current) break;
+                  await speakChunk(subChunk, voice, rate, pitch, volume, false);
+                  await new Promise(r => setTimeout(r, 50));
+                }
+              }
+            } else {
+              consecutiveEarlyStops = 0; // Reset on successful chunk
+            }
+          }
           
           // Minimal gap between chunks
           if (i < chunks.length - 1 && !isCancelledRef.current) {
