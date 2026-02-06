@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
-// Phone number validation (Indian format - accepts 10 digits, with optional leading 0 or +91)
+// Phone number validation (Indian format - accepts 10 digits, with optional leading 0, 91, or +91)
+// Also strips spaces, dashes, and dots before validation
 const phoneRegex = /^(?:(?:\+91|91|0)?[6-9]\d{9})$/;
+
+// Helper to clean phone number before validation
+export function cleanPhoneNumber(phone: string): string {
+  return phone.replace(/[\s\-\.]/g, '');
+}
 
 // Name validation - allows letters, spaces, and common Indian name characters
 const nameRegex = /^[a-zA-Z\s\u0900-\u097F]+$/;
@@ -19,11 +25,12 @@ export const passwordSchema = z
   .min(6, { message: "Password must be at least 6 characters" })
   .max(72, { message: "Password must be less than 72 characters" });
 
-// Phone validation
+// Phone validation - cleans the number before validating
 export const phoneSchema = z
   .string()
   .trim()
-  .regex(phoneRegex, { message: "Enter a valid 10-digit phone number" });
+  .transform((val) => val.replace(/[\s\-\.]/g, ''))
+  .refine((val) => phoneRegex.test(val), { message: "Enter a valid 10-digit phone number (e.g., 9876543210)" });
 
 // Name validation
 export const nameSchema = z

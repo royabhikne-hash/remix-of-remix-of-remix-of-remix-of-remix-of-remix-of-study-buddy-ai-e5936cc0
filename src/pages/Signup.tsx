@@ -270,8 +270,9 @@ const Signup = () => {
                     value={formData.fullName}
                     onChange={handleInputChange}
                     required
-                    className="h-10 sm:h-12 text-sm"
+                    className={`h-10 sm:h-12 text-sm ${validationErrors.fullName ? 'border-destructive' : ''}`}
                   />
+                  {validationErrors.fullName && <p className="text-xs text-destructive mt-1">{validationErrors.fullName}</p>}
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-sm">Phone Number *</Label>
@@ -283,8 +284,9 @@ const Signup = () => {
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
-                    className="h-10 sm:h-12 text-sm"
+                    className={`h-10 sm:h-12 text-sm ${validationErrors.phone ? 'border-destructive' : ''}`}
                   />
+                  {validationErrors.phone && <p className="text-xs text-destructive mt-1">{validationErrors.phone}</p>}
                 </div>
               </div>
 
@@ -299,8 +301,9 @@ const Signup = () => {
                     value={formData.parentWhatsapp}
                     onChange={handleInputChange}
                     required
-                    className="h-10 sm:h-12 text-sm"
+                    className={`h-10 sm:h-12 text-sm ${validationErrors.parentWhatsapp ? 'border-destructive' : ''}`}
                   />
+                  {validationErrors.parentWhatsapp && <p className="text-xs text-destructive mt-1">{validationErrors.parentWhatsapp}</p>}
                 </div>
                 <div>
                   <Label htmlFor="email" className="text-sm">Email *</Label>
@@ -312,8 +315,9 @@ const Signup = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="h-10 sm:h-12 text-sm"
+                    className={`h-10 sm:h-12 text-sm ${validationErrors.email ? 'border-destructive' : ''}`}
                   />
+                  {validationErrors.email && <p className="text-xs text-destructive mt-1">{validationErrors.email}</p>}
                 </div>
               </div>
 
