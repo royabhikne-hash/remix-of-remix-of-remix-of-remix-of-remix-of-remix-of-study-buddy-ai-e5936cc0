@@ -12,15 +12,15 @@ export interface SpeechifyVoice {
 }
 
 // Speechify system voices (shared voices available to all users)
-// Note: For Hindi text, the simba-multilingual model is used automatically
+// Note: simba-multilingual model is used for all voices to support Hindi/Hinglish
 export const SPEECHIFY_VOICES: SpeechifyVoice[] = [
-  // Primary voices (work well with Hinglish/Hindi text via multilingual model)
-  { id: 'henry', name: 'Henry', language: 'English (India)', languageCode: 'en-IN', gender: 'male', description: 'Clear male voice, great for education' },
+  // Indian voices - best for Hindi/Hinglish content (prioritized first)
+  { id: 'henry', name: 'Henry 🇮🇳', language: 'Hindi/English (India)', languageCode: 'hi-IN', gender: 'male', description: 'Indian accent, Hindi/Hinglish के लिए best' },
+  { id: 'natasha', name: 'Natasha 🇮🇳', language: 'Hindi/English (India)', languageCode: 'hi-IN', gender: 'female', description: 'Indian female voice, natural Hindi pronunciation' },
+  // English voices
   { id: 'george', name: 'George', language: 'English (UK)', languageCode: 'en-GB', gender: 'male', description: 'British accent, professional' },
   { id: 'cliff', name: 'Cliff', language: 'English (US)', languageCode: 'en-US', gender: 'male', description: 'American accent, clear' },
-  { id: 'natasha', name: 'Natasha', language: 'English', languageCode: 'en-US', gender: 'female', description: 'Female voice, natural' },
   { id: 'mrbeast', name: 'MrBeast', language: 'English', languageCode: 'en-US', gender: 'male', description: 'Energetic, fun' },
-  { id: 'snoop', name: 'Snoop', language: 'English', languageCode: 'en-US', gender: 'male', description: 'Laid-back style' },
   { id: 'gwyneth', name: 'Gwyneth', language: 'English', languageCode: 'en-US', gender: 'female', description: 'Calm, professional' },
   { id: 'oliver', name: 'Oliver', language: 'English (UK)', languageCode: 'en-GB', gender: 'male', description: 'British, formal' },
 ];
@@ -210,10 +210,10 @@ export const useSpeechifyTTS = () => {
     const voice = SPEECHIFY_VOICES.find(v => v.id === voiceId);
     if (!voice) return;
 
-    // Use Hinglish preview text to test multilingual support
-    const previewText = "Namaste! Main aapka Study Buddy hun. Aaj kya padhna hai?";
+    // Use Hindi preview text to demonstrate Hindi pronunciation
+    const previewText = "नमस्ते! मैं आपका Study Buddy हूं। आज क्या पढ़ना है?";
 
-    await speak({ text: previewText, voiceId });
+    await speak({ text: previewText, voiceId, language: 'hi-IN' });
   }, [speak]);
 
   // Clear all cached audio

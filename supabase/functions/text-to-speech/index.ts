@@ -91,11 +91,16 @@ serve(async (req) => {
       ? cleanText.substring(0, maxLength) + '...'
       : cleanText;
 
-    // Determine model based on content - use multilingual for Hindi text
+    // Determine model based on content - use multilingual for Hindi/Hinglish text
     const hasHindi = containsHindi(truncatedText);
-    const model = hasHindi ? 'simba-multilingual' : 'simba-english';
+    // Always use simba-multilingual for better Hindi/Hinglish support
+    const model = 'simba-multilingual';
+    
+    // Determine language - for Hinglish (mixed Hindi-English), use hi-IN
+    // This ensures proper pronunciation of Hindi words
+    const detectedLanguage = hasHindi ? 'hi-IN' : (language === 'hi-IN' ? 'hi-IN' : 'en-IN');
 
-    console.log(`TTS Request: ${truncatedText.length} chars, voice: ${voiceId}, model: ${model}, hasHindi: ${hasHindi}`);
+    console.log(`TTS Request: ${truncatedText.length} chars, voice: ${voiceId}, model: ${model}, language: ${detectedLanguage}, hasHindi: ${hasHindi}`);
 
     // Check cache first
     cleanCache();
@@ -109,7 +114,8 @@ serve(async (req) => {
           audio: cached.audio, 
           cached: true,
           format: 'mp3',
-          textLength: truncatedText.length
+          textLength: truncatedText.length,
+          model: model
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -123,12 +129,9 @@ serve(async (req) => {
       voice_id: voiceId,
       audio_format: 'mp3',
       model: model,
+      // Always pass language for better pronunciation
+      language: detectedLanguage,
     };
-
-    // Add language hint for multilingual model
-    if (hasHindi) {
-      requestBody.language = 'hi-IN';
-    }
 
     const speechifyResponse = await fetch('https://api.sws.speechify.com/v1/audio/speech', {
       method: 'POST',
