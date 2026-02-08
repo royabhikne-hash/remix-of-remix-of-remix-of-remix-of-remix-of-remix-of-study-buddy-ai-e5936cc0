@@ -1114,6 +1114,14 @@ const StudyChat = ({ onEndStudy, studentId, studentClass = "10", studentBoard = 
                           <>
                             <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
                             <SoundWave isActive={true} className="ml-0.5 sm:ml-1" />
+                            {/* TTS Type Indicator - shows Premium or Web */}
+                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold ${
+                              isPremiumActive 
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' 
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {isPremiumActive ? '✨ Pro' : 'Web'}
+                            </span>
                           </>
                         ) : (
                           <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground hover:text-foreground" />
