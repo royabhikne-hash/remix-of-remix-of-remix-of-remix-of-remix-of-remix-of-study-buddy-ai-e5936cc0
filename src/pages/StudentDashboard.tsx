@@ -22,6 +22,7 @@ import {
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import ChatHistory from "@/components/ChatHistory";
 import StudentRankingCard from "@/components/StudentRankingCard";
+import SubscriptionCard from "@/components/SubscriptionCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useToast } from "@/hooks/use-toast";
@@ -551,6 +552,11 @@ const StudentDashboard = () => {
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* Subscription Card - Show plan status */}
+        <div className="mb-6">
+          <SubscriptionCard studentId={studentId} onRefresh={loadStudentData} />
         </div>
 
         {/* Main Tabs: Study / Rankings */}

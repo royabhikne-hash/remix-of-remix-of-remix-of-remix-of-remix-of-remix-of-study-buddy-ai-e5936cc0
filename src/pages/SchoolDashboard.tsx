@@ -25,6 +25,7 @@ import {
   LayoutGrid,
   List,
   Key,
+  Crown,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import StudentReportModal from "@/components/StudentReportModal";
 import StudentAnalyticsCard from "@/components/StudentAnalyticsCard";
+import UpgradeRequestsTab from "@/components/UpgradeRequestsTab";
+import StudentSubscriptionManagement from "@/components/StudentSubscriptionManagement";
 import { useToast } from "@/hooks/use-toast";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -134,6 +137,11 @@ const SchoolDashboard = () => {
   }>({ open: false, student: null });
   const [newStudentPassword, setNewStudentPassword] = useState("");
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+
+  // Subscription management state
+  const [subscriptionStudents, setSubscriptionStudents] = useState<any[]>([]);
+  const [pendingUpgradeRequests, setPendingUpgradeRequests] = useState<any[]>([]);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   useEffect(() => {
     const storedSchoolName = localStorage.getItem("schoolName");
@@ -293,6 +301,44 @@ const SchoolDashboard = () => {
       setLoading(false);
     }
   };
+
+  // Load subscription data for approved students
+  const loadSubscriptionData = async () => {
+    if (!schoolUuid) return;
+    
+    setSubscriptionLoading(true);
+    try {
+      const sessionToken = localStorage.getItem("schoolSessionToken");
+      if (!sessionToken) return;
+
+      const { data, error } = await supabase.functions.invoke("manage-subscription", {
+        body: {
+          action: "get_requests",
+          sessionToken,
+          schoolUuid,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.students) {
+        setSubscriptionStudents(data.students);
+      }
+      if (data?.pendingRequests) {
+        setPendingUpgradeRequests(data.pendingRequests);
+      }
+    } catch (err) {
+      console.error("Error loading subscription data:", err);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
+
+  // Load subscription data when switching to subscriptions tab
+  useEffect(() => {
+    if (activeTab === "subscriptions" && schoolUuid) {
+      loadSubscriptionData();
+    }
+  }, [activeTab, schoolUuid]);
 
   const getSchoolCredentials = () => {
     const schoolId = localStorage.getItem("schoolId");
@@ -783,23 +829,30 @@ const SchoolDashboard = () => {
           </div>
         </div>
 
-        {/* Tabs for Pending vs Approved vs Rankings */}
+        {/* Tabs for Pending vs Approved vs Subscriptions vs Rankings */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
             <TabsTrigger value="approved" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" />
-              {t("student.approved")} ({approvedStudents.length})
+              <span className="hidden sm:inline">{t("student.approved")}</span> ({approvedStudents.length})
             </TabsTrigger>
             <TabsTrigger value="pending" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm relative">
               <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-              {t("student.pending")} ({pendingStudents.length})
+              <span className="hidden sm:inline">{t("student.pending")}</span> ({pendingStudents.length})
               {pendingStudents.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full" />
               )}
             </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm relative">
+              <Crown className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Plans</span>
+              {pendingUpgradeRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+              )}
+            </TabsTrigger>
             <TabsTrigger value="rankings" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
-              Rankings
+              <span className="hidden sm:inline">Rankings</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1220,6 +1273,53 @@ const SchoolDashboard = () => {
                   </div>
                 </div>
               )}
+          </TabsContent>
+
+          {/* Subscriptions Tab */}
+          <TabsContent value="subscriptions" className="mt-4 sm:mt-6">
+            <Tabs defaultValue="requests" className="space-y-4">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="requests" className="flex items-center gap-2 text-xs sm:text-sm">
+                  <Crown className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Upgrade Requests ({pendingUpgradeRequests.length})
+                </TabsTrigger>
+                <TabsTrigger value="manage" className="flex items-center gap-2 text-xs sm:text-sm">
+                  <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                  All Students
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="requests">
+                {subscriptionLoading ? (
+                  <div className="edu-card p-8 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-muted-foreground">Loading subscription requests...</p>
+                  </div>
+                ) : (
+                  <UpgradeRequestsTab
+                    students={subscriptionStudents}
+                    pendingRequests={pendingUpgradeRequests}
+                    schoolUuid={schoolUuid || ""}
+                    onRefresh={loadSubscriptionData}
+                  />
+                )}
+              </TabsContent>
+              
+              <TabsContent value="manage">
+                {subscriptionLoading ? (
+                  <div className="edu-card p-8 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-muted-foreground">Loading students...</p>
+                  </div>
+                ) : (
+                  <StudentSubscriptionManagement
+                    students={subscriptionStudents}
+                    schoolUuid={schoolUuid || ""}
+                    onRefresh={loadSubscriptionData}
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           {/* Rankings Tab */}

@@ -26,7 +26,8 @@ import {
   AlertTriangle,
   Database,
   Trophy,
-   Key,
+  Key,
+  Crown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +51,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import StudentReportModal from "@/components/StudentReportModal";
 import StudentRanking from "@/components/StudentRanking";
+import SubscriptionAnalytics from "@/components/SubscriptionAnalytics";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -100,7 +102,7 @@ const AdminDashboard = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports" | "student-reports" | "rankings">("schools");
+  const [activeTab, setActiveTab] = useState<"schools" | "students" | "reports" | "student-reports" | "rankings" | "subscriptions">("schools");
   const [rankings, setRankings] = useState<RankingData[]>([]);
   
   // Add school modal state
@@ -819,6 +821,15 @@ const AdminDashboard = () => {
             <Trophy className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
             Rankings
           </Button>
+          <Button
+            variant={activeTab === "subscriptions" ? "default" : "outline"}
+            onClick={() => setActiveTab("subscriptions")}
+            size="sm"
+            className="text-xs sm:text-sm whitespace-nowrap"
+          >
+            <Crown className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            Plans
+          </Button>
         </div>
 
         {/* Search & Actions */}
@@ -1295,6 +1306,10 @@ const AdminDashboard = () => {
             title="🏆 Global Student Rankings"
             showTop={50}
           />
+        )}
+
+        {activeTab === "subscriptions" && (
+          <SubscriptionAnalytics />
         )}
       </main>
 

@@ -678,6 +678,97 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          is_active: boolean
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          start_date: string
+          student_id: string
+          tts_limit: number
+          tts_used: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          start_date?: string
+          student_id: string
+          tts_limit?: number
+          tts_used?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          start_date?: string
+          student_id?: string
+          tts_limit?: number
+          tts_used?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upgrade_requests: {
+        Row: {
+          created_at: string
+          id: string
+          processed_at: string | null
+          processed_by: string | null
+          rejection_reason: string | null
+          requested_at: string
+          requested_plan: Database["public"]["Enums"]["subscription_plan"]
+          status: Database["public"]["Enums"]["upgrade_request_status"]
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          rejection_reason?: string | null
+          requested_at?: string
+          requested_plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["upgrade_request_status"]
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          rejection_reason?: string | null
+          requested_at?: string
+          requested_plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["upgrade_request_status"]
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upgrade_requests_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       schools_public: {
@@ -732,7 +823,9 @@ export type Database = {
       admin_role: "super_admin" | "admin"
       board_type: "CBSE" | "ICSE" | "Bihar Board" | "Other"
       improvement_trend: "up" | "down" | "stable"
+      subscription_plan: "basic" | "pro"
       understanding_level: "weak" | "average" | "good" | "excellent"
+      upgrade_request_status: "pending" | "approved" | "rejected" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -863,7 +956,9 @@ export const Constants = {
       admin_role: ["super_admin", "admin"],
       board_type: ["CBSE", "ICSE", "Bihar Board", "Other"],
       improvement_trend: ["up", "down", "stable"],
+      subscription_plan: ["basic", "pro"],
       understanding_level: ["weak", "average", "good", "excellent"],
+      upgrade_request_status: ["pending", "approved", "rejected", "blocked"],
     },
   },
 } as const
