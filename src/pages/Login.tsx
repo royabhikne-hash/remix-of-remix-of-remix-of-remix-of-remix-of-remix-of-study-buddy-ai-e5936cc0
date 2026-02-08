@@ -24,93 +24,37 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showAuthRepair, setShowAuthRepair] = useState(false);
 
-  // Check for pending signup and create profile if needed
+  // Check if user is already logged in and approved
   useEffect(() => {
-    const handlePendingSignup = async () => {
+    const checkUserApproval = async () => {
       if (!user) return;
       
-      const pendingData = localStorage.getItem("pendingSignup");
-      if (!pendingData) return;
+      // Check if student profile exists and is approved
+      const { data: student, error } = await supabase
+        .from("students")
+        .select("id, is_approved, full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
       
-      try {
-        const data = JSON.parse(pendingData);
-        
-        // Check if student profile already exists
-        const { data: existingProfile } = await supabase
-          .from("students")
-          .select("id")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        
-        if (existingProfile) {
-          // Profile already exists, clear pending data
-          localStorage.removeItem("pendingSignup");
-          return;
-        }
-        
-        // Upload photo if available (from base64)
-        let photoUrl = null;
-        if (data.photoFile) {
-          try {
-            // Convert base64 to blob
-            const response = await fetch(data.photoFile);
-            const blob = await response.blob();
-            const fileName = `${user.id}/${Date.now()}.jpg`;
-            
-            const { error: uploadError } = await supabase.storage
-              .from('student-photos')
-              .upload(fileName, blob);
-
-            if (!uploadError) {
-              const { data: { publicUrl } } = supabase.storage
-                .from('student-photos')
-                .getPublicUrl(fileName);
-              photoUrl = publicUrl;
-            }
-          } catch (uploadErr) {
-            console.error("Photo upload error:", uploadErr);
-          }
-        }
-        
-        // Create student profile
-        const { error: profileError } = await supabase
-          .from("students")
-          .insert({
-            user_id: user.id,
-            photo_url: photoUrl,
-            full_name: data.fullName,
-            phone: data.phone,
-            parent_whatsapp: data.parentWhatsapp,
-            class: data.class,
-            age: parseInt(data.age),
-            board: data.board,
-            school_id: data.schoolId,
-            district: data.district,
-            state: data.state,
-          });
-
-        if (profileError) {
-          console.error("Profile creation error:", profileError);
-        } else {
-          toast({
-            title: "Profile Created!",
-            description: "Your student profile has been set up successfully.",
-          });
-        }
-        
-        // Clear pending data
-        localStorage.removeItem("pendingSignup");
-        
-        // Navigate to dashboard
-        navigate("/dashboard");
-      } catch (err) {
-        console.error("Error processing pending signup:", err);
-        localStorage.removeItem("pendingSignup");
+      if (error) {
+        console.error("Error checking student:", error);
+        return;
       }
+      
+      if (!student) {
+        // No student profile, stay on login
+        return;
+      }
+      
+      if (student.is_approved) {
+        // Student is approved, go to dashboard
+        navigate("/dashboard");
+      }
+      // If not approved, stay on login page - will show message when they try to login
     };
     
-    handlePendingSignup();
-  }, [user, navigate, toast]);
+    checkUserApproval();
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +95,30 @@ const Login = () => {
         }
         setIsLoading(false);
         return;
+      }
+
+      // Check if student is approved by their school
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: student } = await supabase
+          .from("students")
+          .select("id, is_approved, full_name")
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+        
+        if (student && !student.is_approved) {
+          toast({
+            title: language === 'en' ? "Approval Pending ⏳" : "अप्रूवल पेंडिंग ⏳",
+            description: language === 'en' 
+              ? "Your account is waiting for school approval. Please wait for your school to approve." 
+              : "आपका अकाउंट स्कूल अप्रूवल का इंतज़ार कर रहा है। कृपया अपने स्कूल से अप्रूवल का इंतज़ार करें।",
+            variant: "destructive",
+          });
+          // Sign out since not approved
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return;
+        }
       }
 
       toast({

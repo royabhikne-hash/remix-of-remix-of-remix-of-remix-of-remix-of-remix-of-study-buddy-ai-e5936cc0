@@ -155,41 +155,26 @@ const Signup = () => {
         return;
       }
 
-      // Try to get user - may not be available if email confirmation is required
+      // Get user - email auto-confirm is enabled so user should be available
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // User is available (email confirmation disabled) - create profile immediately
+        // Create student profile immediately
         await createStudentProfile(user.id);
         
         toast({
-          title: "Account Created!",
-          description: "Welcome to Study Buddy AI. Let's start studying!",
+          title: "Account Created! 🎉",
+          description: "Your account is pending school approval. You'll be notified once approved.",
         });
         
-        navigate("/dashboard");
-      } else {
-        // Email confirmation is required - show success message
-        toast({
-          title: "Check Your Email! 📧",
-          description: "We've sent a verification link to your email. Please verify to complete signup.",
-        });
-        
-        // Store signup data temporarily for profile creation after verification
-        localStorage.setItem("pendingSignup", JSON.stringify({
-          fullName: formData.fullName,
-          phone: formData.phone,
-          parentWhatsapp: formData.parentWhatsapp,
-          class: formData.class,
-          age: formData.age,
-          board: formData.board,
-          district: formData.district,
-          state: formData.state,
-          schoolId: selectedSchoolId,
-          photoFile: photoPreview, // Store base64 preview
-        }));
-        
+        // Navigate to a pending approval page or login
         navigate("/login");
+      } else {
+        toast({
+          title: "Signup Failed",
+          description: "Could not create your account. Please try again.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Signup error:", error);
