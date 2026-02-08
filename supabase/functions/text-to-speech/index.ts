@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +51,84 @@ function containsHindi(text: string): boolean {
   return hindiPattern.test(text);
 }
 
+// Check if student can use premium TTS and track usage
+async function checkAndTrackUsage(
+  supabase: any,
+  studentId: string,
+  textLength: number
+): Promise<{ canUse: boolean; usageInfo?: any; reason?: string }> {
+  try {
+    // Get current subscription
+    const { data: sub, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('student_id', studentId)
+      .maybeSingle();
+
+    if (error || !sub) {
+      return { canUse: false, reason: 'No subscription found' };
+    }
+
+    // Check if Pro plan and active
+    const isPro = sub.plan === 'pro' && sub.is_active;
+    const isExpired = sub.end_date && new Date(sub.end_date) < new Date();
+    const hasQuota = sub.tts_used + textLength <= sub.tts_limit;
+
+    if (!isPro) {
+      return { 
+        canUse: false, 
+        reason: 'Basic plan - use Web TTS',
+        usageInfo: {
+          plan: 'basic',
+          ttsUsed: sub.tts_used,
+          ttsLimit: sub.tts_limit,
+          ttsRemaining: sub.tts_limit - sub.tts_used,
+          canUsePremium: false,
+        }
+      };
+    }
+
+    if (isExpired) {
+      return { canUse: false, reason: 'Pro subscription expired' };
+    }
+
+    if (!hasQuota) {
+      return { 
+        canUse: false, 
+        reason: 'TTS limit reached',
+        usageInfo: {
+          plan: 'pro',
+          ttsUsed: sub.tts_used,
+          ttsLimit: sub.tts_limit,
+          ttsRemaining: 0,
+          canUsePremium: false,
+        }
+      };
+    }
+
+    // Update usage count
+    const newTtsUsed = sub.tts_used + textLength;
+    await supabase
+      .from('subscriptions')
+      .update({ tts_used: newTtsUsed })
+      .eq('id', sub.id);
+
+    return { 
+      canUse: true,
+      usageInfo: {
+        plan: 'pro',
+        ttsUsed: newTtsUsed,
+        ttsLimit: sub.tts_limit,
+        ttsRemaining: sub.tts_limit - newTtsUsed,
+        canUsePremium: newTtsUsed < sub.tts_limit,
+      }
+    };
+  } catch (err) {
+    console.error('Usage check error:', err);
+    return { canUse: false, reason: 'Usage check failed' };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -58,6 +137,8 @@ serve(async (req) => {
 
   try {
     const SPEECHIFY_API_KEY = Deno.env.get('SPEECHIFY_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!SPEECHIFY_API_KEY) {
       console.error('SPEECHIFY_API_KEY not configured');
@@ -67,7 +148,7 @@ serve(async (req) => {
       );
     }
 
-    const { text, voiceId = 'henry', speed = 1.0, language = 'en-IN' } = await req.json();
+    const { text, voiceId = 'henry', speed = 1.0, language = 'en-IN', studentId } = await req.json();
 
     if (!text || typeof text !== 'string') {
       return new Response(
@@ -91,16 +172,36 @@ serve(async (req) => {
       ? cleanText.substring(0, maxLength) + '...'
       : cleanText;
 
+    // Check subscription and track usage if studentId provided
+    let usageInfo = null;
+    if (studentId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const usageResult = await checkAndTrackUsage(supabase, studentId, truncatedText.length);
+      
+      if (!usageResult.canUse) {
+        // Return fallback signal - client should use Web TTS
+        return new Response(
+          JSON.stringify({ 
+            error: 'FALLBACK_TO_WEB_TTS',
+            reason: usageResult.reason,
+            usageInfo: usageResult.usageInfo,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      usageInfo = usageResult.usageInfo;
+    }
+
     // Determine model based on content - use multilingual for Hindi/Hinglish text
     const hasHindi = containsHindi(truncatedText);
     // Always use simba-multilingual for better Hindi/Hinglish support
     const model = 'simba-multilingual';
     
     // Determine language - for Hinglish (mixed Hindi-English), use hi-IN
-    // This ensures proper pronunciation of Hindi words
     const detectedLanguage = hasHindi ? 'hi-IN' : (language === 'hi-IN' ? 'hi-IN' : 'en-IN');
 
-    console.log(`TTS Request: ${truncatedText.length} chars, voice: ${voiceId}, model: ${model}, language: ${detectedLanguage}, hasHindi: ${hasHindi}`);
+    console.log(`TTS Request: ${truncatedText.length} chars, voice: ${voiceId}, model: ${model}, language: ${detectedLanguage}, hasHindi: ${hasHindi}, studentId: ${studentId || 'none'}`);
 
     // Check cache first
     cleanCache();
@@ -115,7 +216,8 @@ serve(async (req) => {
           cached: true,
           format: 'mp3',
           textLength: truncatedText.length,
-          model: model
+          model: model,
+          usageInfo: usageInfo,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -129,7 +231,6 @@ serve(async (req) => {
       voice_id: voiceId,
       audio_format: 'mp3',
       model: model,
-      // Always pass language for better pronunciation
       language: detectedLanguage,
     };
 
@@ -146,7 +247,6 @@ serve(async (req) => {
       const errorText = await speechifyResponse.text();
       console.error('Speechify API error:', speechifyResponse.status, errorText);
       
-      // Return a more helpful error for common issues
       if (speechifyResponse.status === 401) {
         return new Response(
           JSON.stringify({ error: 'TTS authentication failed. Please check API key.' }),
@@ -202,7 +302,8 @@ serve(async (req) => {
         format: 'mp3',
         textLength: truncatedText.length,
         audioSize: audioSize,
-        model: model
+        model: model,
+        usageInfo: usageInfo,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

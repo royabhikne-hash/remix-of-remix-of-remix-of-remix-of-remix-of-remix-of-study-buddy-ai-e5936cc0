@@ -10,7 +10,7 @@ import SoundWave from "@/components/SoundWave";
 import VoiceInputIndicator from "@/components/VoiceInputIndicator";
 import Confetti from "@/components/Confetti";
 import TypingText from "@/components/TypingText";
-import { useSpeechifyTTS } from "@/hooks/useSpeechifyTTS";
+import { useSmartTTS, SPEECHIFY_VOICES } from "@/hooks/useSmartTTS";
 import SpeechifyVoiceSelector from "@/components/SpeechifyVoiceSelector";
 import SubjectChapterSelector from "@/components/SubjectChapterSelector";
 import { BoardType } from "@/data/syllabusData";
@@ -134,7 +134,8 @@ const StudyChat = ({ onEndStudy, studentId, studentClass = "10", studentBoard = 
   const [voiceSpeed, setVoiceSpeed] = useState(0.9);
   const [autoSpeak, setAutoSpeak] = useState(true); // Auto-speak enabled by default
 
-  // Speechify TTS hook - server-side for cross-platform consistency
+  // Smart TTS hook with subscription-aware logic
+  // Basic plan: Web TTS only | Pro plan: Premium TTS with 150k chars/month
   const { 
     speak: speechifySpeak, 
     stop: stopTTS, 
@@ -145,7 +146,10 @@ const StudyChat = ({ onEndStudy, studentId, studentClass = "10", studentBoard = 
     setVoice,
     previewVoice,
     voices: availableVoices,
-  } = useSpeechifyTTS();
+    usageInfo: ttsUsageInfo,
+    getStatusMessage: getTTSStatusMessage,
+    isPremiumActive,
+  } = useSmartTTS(studentId || null);
   
   // Quiz mode state
   const [isQuizMode, setIsQuizMode] = useState(false);
