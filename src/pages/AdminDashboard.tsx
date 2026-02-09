@@ -1176,54 +1176,50 @@ const AdminDashboard = () => {
                 
                 const whatsappNumber = formatWhatsAppNumber(student.parent_whatsapp);
                 const reportMessage = encodeURIComponent(
-                  `🎓 *EduImprove AI - Progress Report*\n\n` +
+                  `🎓 *Study Buddy AI - Progress Report*\n\n` +
                   `👤 Student: ${student.full_name}\n` +
                   `📚 Class: ${student.class}\n` +
                   `🏫 School: ${student.school_name}\n\n` +
                   `📊 Aapke bachche ki weekly progress report ready hai!\n\n` +
-                  `📱 Full report dekhne ke liye EduImprove AI app use karein.\n\n` +
+                  `📱 Full report dekhne ke liye Study Buddy AI app use karein.\n\n` +
                   `_Report generated on ${new Date().toLocaleDateString('en-IN')}_`
                 );
                 const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${reportMessage}`;
                 
                 return (
-                  <div key={student.id} className="p-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {student.photo_url ? (
-                          <img 
-                            src={student.photo_url} 
-                            alt={student.full_name}
-                            className="w-12 h-12 rounded-full object-cover border-2 border-primary/20"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-lg font-bold text-primary">
-                            {student.full_name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-semibold truncate">{student.full_name}</p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {student.class} • {student.school_name}
-                          </p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            📞 {student.parent_whatsapp}
-                          </p>
+                  <div key={student.id} className="p-3 sm:p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                      {student.photo_url ? (
+                        <img 
+                          src={student.photo_url} 
+                          alt={student.full_name}
+                          className="w-9 h-9 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-primary/20 flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-base sm:text-lg font-bold text-primary flex-shrink-0">
+                          {student.full_name.charAt(0)}
                         </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm sm:text-base truncate">{student.full_name}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                          {student.class} • {student.school_name}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                          📞 {student.parent_whatsapp}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#25D366] hover:bg-[#20BD5A] text-white font-medium text-sm transition-colors shadow-sm"
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                          </svg>
-                          Open WhatsApp
-                        </a>
-                      </div>
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-[#25D366] hover:bg-[#20BD5A] text-white font-medium text-xs sm:text-sm transition-colors shadow-sm flex-shrink-0"
+                      >
+                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                        <span className="hidden xs:inline">WhatsApp</span>
+                      </a>
                     </div>
                   </div>
                 );
@@ -1247,48 +1243,51 @@ const AdminDashboard = () => {
             </div>
             <div className="divide-y divide-border">
               {filteredStudents.filter(s => !s.is_banned).map((student) => (
-                <div key={student.id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div key={student.id} className="p-3 sm:p-4">
+                  <div className="flex items-center gap-3 mb-2 sm:mb-0">
                     {student.photo_url ? (
                       <img 
                         src={student.photo_url} 
                         alt={student.full_name}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-primary/20"
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-primary/20 flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center text-base sm:text-lg font-bold flex-shrink-0">
                         {student.full_name.charAt(0)}
                       </div>
                     )}
-                    <div>
-                      <p className="font-semibold">{student.full_name}</p>
-                      <p className="text-sm text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm sm:text-base truncate">{student.full_name}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">
                         {student.class} • {student.school_name}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewStudentReport(student)}
-                  >
-                    <ClipboardList className="w-4 h-4 mr-2" />
-                    View Report
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePreviewReport(student)}
-                    disabled={reportPreviewDialog?.loading && reportPreviewDialog?.student?.id === student.id}
-                    className="text-primary"
-                  >
-                    {reportPreviewDialog?.loading && reportPreviewDialog?.student?.id === student.id ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Eye className="w-4 h-4 mr-2" />
-                    )}
-                    Preview & Send
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 ml-12 sm:ml-13">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewStudentReport(student)}
+                      className="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3"
+                    >
+                      <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                      View Report
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewReport(student)}
+                      disabled={reportPreviewDialog?.loading && reportPreviewDialog?.student?.id === student.id}
+                      className="text-primary text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3"
+                    >
+                      {reportPreviewDialog?.loading && reportPreviewDialog?.student?.id === student.id ? (
+                        <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                      )}
+                      Preview & Send
+                    </Button>
+                  </div>
                 </div>
               ))}
               {filteredStudents.filter(s => !s.is_banned).length === 0 && (
