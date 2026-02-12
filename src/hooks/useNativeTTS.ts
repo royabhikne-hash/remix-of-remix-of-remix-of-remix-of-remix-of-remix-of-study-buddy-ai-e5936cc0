@@ -55,6 +55,25 @@ export const useNativeTTS = () => {
     
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    // WebView fix: voices often load late, retry aggressively
+    if (isWebViewRef.current) {
+      const retryIntervals = [300, 800, 1500, 3000, 5000];
+      const timers = retryIntervals.map(delay =>
+        setTimeout(() => {
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0 && availableVoices.length === 0) {
+            console.log(`TTS: WebView voice retry loaded ${voices.length} voices after ${delay}ms`);
+            setAvailableVoices(voices);
+          }
+        }, delay)
+      );
+      return () => {
+        timers.forEach(clearTimeout);
+        window.speechSynthesis.cancel();
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      };
+    }
     
     return () => {
       window.speechSynthesis.cancel();
@@ -172,7 +191,7 @@ export const useNativeTTS = () => {
       }
 
       const startTime = Date.now();
-      const minExpectedDuration = 2500; // If speech stops before 2.5 seconds, it's suspicious
+      const minExpectedDuration = 2500;
 
       const utterance = new SpeechSynthesisUtterance(text);
       utteranceRef.current = utterance;
@@ -188,10 +207,22 @@ export const useNativeTTS = () => {
       utterance.pitch = Math.max(0, Math.min(2, pitch));
       utterance.volume = Math.max(0, Math.min(1, volume));
 
+      // WebView safety: timeout if speech never fires onend/onerror
+      let settled = false;
+      const safetyTimeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          console.log('TTS: Safety timeout - speech may have failed silently');
+          resolve({ completed: false, stoppedEarly: true });
+        }
+      }, Math.max(15000, text.length * 100)); // generous timeout based on text length
+
       utterance.onend = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safetyTimeout);
         const elapsed = Date.now() - startTime;
-        // If text is long but speech ended too quickly, it likely stopped early
-        const textLengthThreshold = 100; // ~100 chars should take more than 2.5s to speak
+        const textLengthThreshold = 100;
         const stoppedEarly = text.length > textLengthThreshold && elapsed < minExpectedDuration;
         
         if (stoppedEarly) {
@@ -202,11 +233,42 @@ export const useNativeTTS = () => {
       };
 
       utterance.onerror = (event) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safetyTimeout);
         console.error('TTS chunk error:', event.error);
         resolve({ completed: false, stoppedEarly: false });
       };
 
-      window.speechSynthesis.speak(utterance);
+      // WebView fix: cancel before speaking to clear any stuck state
+      if (isWebViewRef.current) {
+        window.speechSynthesis.cancel();
+      }
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(safetyTimeout);
+          console.error('TTS: speak() threw error:', e);
+          resolve({ completed: false, stoppedEarly: false });
+        }
+      }
+
+      // WebView fix: check if speaking actually started after a delay
+      if (isWebViewRef.current) {
+        setTimeout(() => {
+          if (!settled && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            console.log('TTS: WebView - speech never started, retrying...');
+            try {
+              window.speechSynthesis.speak(utterance);
+            } catch {
+              // ignore retry errors
+            }
+          }
+        }, 300);
+      }
     });
   }, []);
 

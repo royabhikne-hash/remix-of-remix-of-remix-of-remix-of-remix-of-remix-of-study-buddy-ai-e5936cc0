@@ -292,8 +292,18 @@ export const useSmartTTS = (studentId: string | null) => {
     
     // CRITICAL: Stop any premium audio before starting web TTS
     cleanupAudio();
+
+    // Check if Web Speech API is actually available
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      console.error('TTS: Web Speech API not available in this environment');
+      setState(prev => ({ ...prev, isLoading: false, error: 'Voice not available in this app version' }));
+      return false;
+    }
     
     try {
+      // Set speaking state BEFORE starting (speak is async and resolves when done)
+      setState(prev => ({ ...prev, isSpeaking: true, isLoading: false }));
+      
       await nativeTTS.speak({
         text,
         rate: speed,
@@ -301,7 +311,6 @@ export const useSmartTTS = (studentId: string | null) => {
         volume: 1.0,
       });
       
-      setState(prev => ({ ...prev, isSpeaking: true, isLoading: false }));
       return true;
     } catch (error) {
       console.error('Web TTS Error:', error);
